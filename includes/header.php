@@ -10,7 +10,7 @@ require __DIR__ . '/auth.php';
 <head>
     <base href="">
     <meta charset="utf-8" />
-    <title>RPA </title>
+    <title>Traceability STI </title>
     <meta name="description" content="Updates and statistics" />
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
@@ -49,5 +49,5 @@ require __DIR__ . '/auth.php';
             -moz-appearance: textfield;
         }
     </style>
-    <!-- <link rel="shortcut icon" href="<?= BASE_URL ?>assets/media/favicon.ico" /> -->
+    <link rel="shortcut icon" href="<?= BASE_URL ?>assets/media/logo.png" />
 </head>

@@ -10,7 +10,7 @@ $rule = $_SESSION['rule'] ?? null;
 <div class="footer bg-white py-4 d-flex flex-lg-column " id="kt_footer">
     <div class=" container-fluid  d-flex flex-column flex-md-row align-items-center justify-content-end">
         <div class="text-dark order-2 order-md-1">
-            <span class="text-muted font-weight-bold mr-2">&copy;<?= date('Y') ?> PT. Muramoto Elektronika Indonesia</span>
+            <span class="text-muted font-weight-bold mr-2">&copy;<?= date('Y') ?> PT. Surya Technology Industri</span>
         </div>
     </div>
 </div>
@@ -115,14 +115,14 @@ $rule = $_SESSION['rule'] ?? null;
 <script src="<?= BASE_URL ?>assets/js/scripts.bundle.js"></script>
 <script src="<?= BASE_URL ?>assets/js/pages/features/miscellaneous/sweetalert2.js"></script>
 
-<?php if ($menu != "dashboard"): ?>
 
-    <?php if ($menu): // Hanya muat jika $menu tidak null 
-    ?>
-        <script src="<?= BASE_URL ?>assets/js/table/<?= $menu ?>-table.js"></script>
-    <?php endif; ?>
 
+<?php if (isset($_SESSION['table'])): // Hanya muat jika $menu tidak null 
+?>
+    <script src="<?= BASE_URL ?>assets/js/table/<?= $_SESSION['table'] ?>.js"></script>
 <?php endif; ?>
+
+
 <?php if ($menu == "dashboard"): ?>
     <script src="<?= BASE_URL ?>assets/js/pages/features/charts/apexcharts.js"></script>
     <script src="<?= BASE_URL ?>assets/js/dashboard/script.js"></script>

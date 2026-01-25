@@ -5,7 +5,7 @@
 			<!--begin::Container-->
 			<div class=" container-fluid d-flex align-items-center justify-content-between">
 				<div>
-					<h3 class="text-capitalize"><?= $_SESSION['halaman'] ?></h3>
+					<h3 class="text-capitalize"><?= $_SESSION['halaman'] ?> <span class="text-muted small" style="font-size: 0.75rem"><?= $_SESSION['subHalaman'] ?></span></h3>
 				</div>
 				<!--begin::Header Menu Wrapper-->
 				<!--end::Header Menu Wrapper-->
