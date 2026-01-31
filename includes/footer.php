@@ -127,14 +127,7 @@ $rule = $_SESSION['rule'] ?? null;
     <script src="<?= BASE_URL ?>assets/js/pages/features/charts/apexcharts.js"></script>
     <script src="<?= BASE_URL ?>assets/js/dashboard/script.js"></script>
 <?php endif; ?>
-<?php if ($menu == "minmax"): ?>
-    <script src="<?= BASE_URL ?>assets/js/pages/features/charts/apexcharts.js"></script>
-    <script src="<?= BASE_URL ?>assets/js/minmax/script.js"></script>
-<?php endif; ?>
-<?php if ($menu == "add_data"): ?>
-    <script src="<?= BASE_URL ?>assets/js/data-page/script.js"></script>
-<?php endif; ?>
-<?php if ($menu == "add_line"): ?>
+<?php if ($menu == "line_setting"): ?>
     <script src="<?= BASE_URL ?>assets/js/line/script.js"></script>
 <?php endif; ?>
 <script>
@@ -158,18 +151,7 @@ $rule = $_SESSION['rule'] ?? null;
         });
     }
 
-    function togglePassword(selector, btn) {
-        const input = $(selector);
-        const icon = $(btn).find("i");
 
-        if (input.attr("type") === "password") {
-            input.attr("type", "text");
-            icon.removeClass("far fa-eye").addClass("far fa-eye-slash");
-        } else {
-            input.attr("type", "password");
-            icon.removeClass("far fa-eye-slash").addClass("far fa-eye");
-        }
-    }
 
     function confirmDeleteTemplate(id, url, title = "Yakin mau hapus?", text = "Data akan dihapus permanen!") {
         Swal.fire({
@@ -228,38 +210,6 @@ $rule = $_SESSION['rule'] ?? null;
         });
     }
 
-    function confirmCancel(id, url, title = "Yakin mau membatalkan?", text = "Data akan dihapus!") {
-        Swal.fire({
-            title: title,
-            text: text,
-            icon: 'warning',
-            showCancelButton: true,
-            confirmButtonColor: '#d33',
-            confirmButtonText: 'Batal!',
-            cancelButtonColor: '#3085d6',
-            cancelButtonText: 'Lanjut'
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const form = document.createElement("form");
-                form.method = "POST";
-                form.action = `${HOST_URL}${url}`;
-
-                const inputId = document.createElement("input");
-                inputId.type = "hidden";
-                inputId.name = "id";
-                inputId.value = id;
-
-                form.appendChild(inputId);
-                document.body.appendChild(form);
-                form.submit();
-            }
-        });
-    }
-
-    function syncAppPath() {
-        $("#application_path").val($("#application_name").val());
-    }
-
     // ==================================================================
     // BAGIAN 2: EVENT LISTENERS (HANYA SATU DOCUMENT READY)
     // ==================================================================
@@ -281,117 +231,6 @@ $rule = $_SESSION['rule'] ?? null;
                 }
             });
             <?php unset($_SESSION['alert']); ?>
-        <?php endif; ?>
-
-        // ---------------------------------
-        // FUNGSI SINKRONISASI PATH APLIKASI
-        // ---------------------------------
-        const $appName = $("#application_name");
-        const $appPath = $("#application_path");
-
-        if ($appName.length && $appPath.length) {
-            $appName.on("input change", syncAppPath);
-        }
-
-        // ---------------------------------
-        // FUNGSI UPLOAD CSV
-        // ---------------------------------
-        $(document).on('click', '#addCsvBtn', function(e) {
-            e.preventDefault();
-            const appName = document.getElementById('application_name')?.value.trim() || '';
-            const csvPath = document.getElementById('csv_path')?.value.trim() || '';
-
-            if (!appName) {
-                alert('Application Name harus diisi dulu.');
-                return;
-            }
-
-            document.getElementById('application_name_hidden').value = appName;
-            document.getElementById('csv_path_hidden').value = csvPath;
-
-            const input = document.getElementById('csvFileInput');
-            if (input) input.click();
-            else console.error('csvFileInput not found');
-        });
-
-        $(document).on('change', '#csvFileInput', function(e) {
-            const form = document.getElementById('csvForm');
-            if (form) form.submit();
-            else console.error('csvForm not found');
-        });
-
-        // ---------------------------------
-        // FUNGSI PREVIEW HEADER CSV
-        // ---------------------------------
-        <?php if (!empty($previewRows)): ?>
-            const csvData = <?= json_encode($previewRows, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP) ?>;
-            $('#headerSelector').on('change', function() {
-                const rowIndex = parseInt($(this).val());
-                const selectedHeader = csvData[rowIndex];
-                let html = '';
-                selectedHeader.forEach((col, i) => {
-                    html += `
-                        <tr>
-                            <td>Column ${i + 1}</td>
-                            <td>${col}</td>
-                            <input type="hidden" name="column_${i + 1}" value="${col}">
-                        </tr>
-                    `;
-                });
-                $('#selectedHeaderTable tbody').html(html);
-            });
-            $('#headerSelector').trigger('change');
-        <?php endif; ?>
-
-        // ---------------------------------
-        // FUNGSI PROTEKSI NAVIGASI FORM
-        // ---------------------------------
-        <?php if (!empty($_SESSION['form_add_csv']['application_id'])): ?>
-            let formChanged = true;
-
-            document.querySelectorAll('.btn-safe-navigation').forEach(button => {
-                button.addEventListener('click', function() {
-                    formChanged = false;
-                });
-            });
-
-            document.querySelectorAll(".menu-link").forEach(link => {
-                link.addEventListener("click", function(e) {
-                    if (formChanged) {
-                        e.preventDefault();
-                        Swal.fire({
-                            icon: "warning",
-                            title: "Form Sedang Diisi",
-                            text: "Anda tidak bisa berpindah halaman sebelum menyimpan atau membatalkan form.",
-                            confirmButtonText: "OK",
-                            confirmButtonColor: "#3085d6"
-                        });
-                    }
-                });
-            });
-
-            window.addEventListener("beforeunload", function(e) {
-                if (formChanged) {
-                    // Ini akan memicu popup "Are you sure?"
-                    e.preventDefault();
-                    e.returnValue = "";
-                }
-                // JANGAN kirim beacon di sini
-            });
-
-            // 2. Event 'pagehide' untuk membersihkan data jika user BENAR-BENAR pergi
-            window.addEventListener("pagehide", function(e) {
-                // 'e.persisted' bernilai false jika halaman benar-benar ditutup (bukan disimpan di back/forward cache)
-                // Tapi untuk beacon, kita kirim saja jika form berubah.
-                if (formChanged) {
-                    const formData = new FormData();
-                    formData.append("action", "delete_temp_data");
-                    formData.append("application_id", <?= json_encode($_SESSION['form_add_csv']['application_id']) ?>);
-
-                    // sendBeacon aman digunakan di sini dan tidak akan memblokir penutupan halaman
-                    navigator.sendBeacon("<?= BASE_URL ?>controllers/preference/clear_temp_data.php", formData);
-                }
-            });
         <?php endif; ?>
 
     }); // <-- AKHIR DARI $(document).ready()
