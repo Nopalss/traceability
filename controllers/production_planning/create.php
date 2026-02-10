@@ -9,109 +9,123 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // ================================
-// Ambil & sanitize data utama
+// HEADER DATA
 // ================================
 $productionDate = sanitize($_POST['production_date'] ?? '');
-$lineId         = (int)($_POST['line_id'] ?? 0);
-$productCode    = sanitize($_POST['part_assy'] ?? '');
-$totalQty       = (int)($_POST['total_qty'] ?? 0);
+$lineId = (int)($_POST['line_id'] ?? 0);
 
-$shifts = $_POST['shift'] ?? [];
-$qtys   = $_POST['qty'] ?? [];
-$starts = $_POST['start'] ?? [];
-$ends   = $_POST['end'] ?? [];
+$productCodes = $_POST['product_code'] ?? [];
+$qtys = $_POST['qty'] ?? [];
+$jams = $_POST['jam'] ?? [];
 
 // ================================
-// Validasi awal
+// BASIC VALIDATION
 // ================================
-if (
-    $productionDate === '' ||
-    $lineId <= 0 ||
-    $productCode === '' ||
-    empty($shifts) ||
-    $totalQty <= 0
-) {
-    setAlert(
-        'error',
-        'Oops!',
-        'Data production planning belum lengkap.',
-        'danger',
-        'Coba Lagi'
-    );
+if ($productionDate === '' || $lineId <= 0 || empty($productCodes)) {
+    setAlert('error', 'Oops!', 'Data production planning belum lengkap.', 'danger', 'Coba Lagi');
     redirect('pages/production_planning/create.php');
 }
 
 try {
+
     $pdo->beginTransaction();
 
     // ================================
     // GENERATE PP CODE (GROUP ID)
     // ================================
-    // contoh: PP-20260202-AB12
     $ppCode = 'PP-' . str_replace('-', '', $productionDate) . '-' . strtoupper(substr(uniqid(), -4));
 
     // ================================
-    // PREPARE INSERT
+    // PREPARE HEADER INSERT
     // ================================
-    $insert = $pdo->prepare(
-        "INSERT INTO tbl_production_planning
-        (pp_code, line_id, product_code, shift, production_date, qty, total_qty, status, start, end)
+    $insertPP = $pdo->prepare("
+        INSERT INTO tbl_production_planning
+        (pp_code, line_id, product_code, shift, production_date, qty, total_qty, status)
         VALUES
-        (:pp_code, :line_id, :product_code, :shift, :production_date, :qty, :total_qty, :status, :start, :end)"
-    );
+        (:pp_code, :line_id, :product_code, :shift, :production_date, :qty, :total_qty, 'planned')
+    ");
 
-    $validRow = false;
+    // ================================
+    // PREPARE DETAIL INSERT
+    // ================================
+    $insertDetail = $pdo->prepare("
+        INSERT INTO tbl_detail_production_planning
+        (pp_id, jam, qty, status)
+        VALUES
+        (:pp_id, :jam, :qty, 'planned')
+    ");
 
-    foreach ($shifts as $i => $shiftNo) {
+    $hasData = false;
 
-        $shiftNo = (int)$shiftNo;
-        $qty     = (int)($qtys[$i] ?? 0);
-        $start   = sanitize($starts[$i] ?? '');
-        $end     = sanitize($ends[$i] ?? '');
+    // ================================
+    // LOOP SHIFT → PRODUCT
+    // ================================
+    foreach ($productCodes as $shiftNo => $products) {
 
-        // skip baris kosong
-        if ($shiftNo <= 0 || $qty <= 0 || $start === '' || $end === '') {
-            continue;
+        foreach ($products as $pIndex => $productCode) {
+
+            $productCode = sanitize($productCode);
+            if ($productCode === '') continue;
+
+            $totalQty = 0;
+
+            foreach ($qtys[$shiftNo][$pIndex] as $q) {
+                $totalQty += (int)$q;
+            }
+
+            // skip product yg semua qty = 0
+            if ($totalQty <= 0) continue;
+
+            $hasData = true;
+
+            // ================================
+            // INSERT HEADER
+            // ================================
+            $insertPP->execute([
+                ':pp_code' => $ppCode,
+                ':line_id' => $lineId,
+                ':product_code' => $productCode,
+                ':shift' => $shiftNo,
+                ':production_date' => $productionDate,
+                ':qty' => $totalQty,
+                ':total_qty' => $totalQty
+            ]);
+
+            $ppId = $pdo->lastInsertId();
+
+            // ================================
+            // INSERT DETAIL JAM + OT
+            // ================================
+            foreach ($qtys[$shiftNo][$pIndex] as $jIndex => $qty) {
+
+                $qty = (int)$qty;
+                $jam = sanitize($jams[$shiftNo][$pIndex][$jIndex] ?? '');
+
+                if ($jam === '') continue;
+
+                $insertDetail->execute([
+                    ':pp_id' => $ppId,
+                    ':jam' => $jam,   // bisa jam biasa / OT
+                    ':qty' => $qty
+                ]);
+            }
         }
-
-        $validRow = true;
-
-        $insert->execute([
-            ':pp_code'         => $ppCode,
-            ':line_id'         => $lineId,
-            ':product_code'    => $productCode,
-            ':shift'           => $shiftNo,
-            ':production_date' => $productionDate,
-            ':qty'             => $qty,
-            ':total_qty'       => $totalQty,
-            ':status'          => 'planned',
-            ':start'           => $start,
-            ':end'             => $end,
-        ]);
     }
 
-    if (!$validRow) {
-        throw new Exception('Tidak ada data shift yang valid.');
+    if (!$hasData) {
+        setAlert('error', 'Oops!', 'Semua qty bernilai 0.', 'danger', 'Coba Lagi');
+        redirect('pages/production_planning/create.php');
     }
 
     $pdo->commit();
 
-    setAlert(
-        'success',
-        'Berhasil!',
-        'Production planning berhasil disimpan.',
-        'success',
-        'Oke'
-    );
-
+    setAlert('success', 'Berhasil!', 'Production planning berhasil disimpan.', 'success', 'OK');
     redirect('pages/production_planning/');
 } catch (Exception $e) {
+
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
     }
 
-    handlePdoError(
-        $e,
-        'pages/production_planning/create.php'
-    );
+    handlePdoError($e, 'pages/production_planning/create.php');
 }

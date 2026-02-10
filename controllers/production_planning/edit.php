@@ -9,119 +9,124 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // ================================
-// Ambil & sanitize data utama
+// HEADER
 // ================================
-$ppCode         = sanitize($_POST['pp_code'] ?? '');
+$ppCode = sanitize($_POST['pp_code'] ?? '');
 $productionDate = sanitize($_POST['production_date'] ?? '');
-$lineId         = (int)($_POST['line_id'] ?? 0);
-$productCode    = sanitize($_POST['part_assy'] ?? '');
-$totalQty       = (int)($_POST['total_qty'] ?? 0);
+$lineId = (int)($_POST['line_id'] ?? 0);
 
-$shifts = $_POST['shift'] ?? [];
-$qtys   = $_POST['qty'] ?? [];
-$starts = $_POST['start'] ?? [];
-$ends   = $_POST['end'] ?? [];
+$productCodes = $_POST['product_code'] ?? [];
+$qtys = $_POST['qty'] ?? [];
+$jams = $_POST['jam'] ?? [];
 
-// ================================
-// Validasi awal
-// ================================
-if (
-    $ppCode === '' ||
-    $productionDate === '' ||
-    $lineId <= 0 ||
-    $productCode === '' ||
-    empty($shifts) ||
-    $totalQty <= 0
-) {
-    setAlert(
-        'error',
-        'Oops!',
-        'Data production planning belum lengkap.',
-        'danger',
-        'Coba Lagi'
-    );
+if ($ppCode == '' || $productionDate == '' || $lineId <= 0) {
+    setAlert('error', 'Oops', 'Data tidak lengkap', 'danger', 'OK');
     redirect('pages/production_planning/');
 }
 
 try {
+
     $pdo->beginTransaction();
 
     // ================================
-    // HAPUS DATA LAMA (BY PP_CODE)
+    // DELETE OLD DETAIL
     // ================================
-    $delete = $pdo->prepare(
-        "DELETE FROM tbl_production_planning
-         WHERE pp_code = :pp_code"
-    );
-    $delete->execute([
-        ':pp_code' => $ppCode
-    ]);
+    $pdo->prepare("
+        DELETE FROM tbl_detail_production_planning
+        WHERE pp_id IN (
+            SELECT pp_id FROM tbl_production_planning WHERE pp_code=?
+        )
+    ")->execute([$ppCode]);
 
     // ================================
-    // PREPARE INSERT BARU
+    // DELETE OLD HEADER
     // ================================
-    $insert = $pdo->prepare(
-        "INSERT INTO tbl_production_planning
-        (pp_code, line_id, product_code, shift, production_date,
-         qty, total_qty, status, start, end)
+    $pdo->prepare("DELETE FROM tbl_production_planning WHERE pp_code=?")
+        ->execute([$ppCode]);
+
+    // ================================
+    // PREPARE INSERT
+    // ================================
+    $insertPP = $pdo->prepare("
+        INSERT INTO tbl_production_planning
+        (pp_code,line_id,product_code,shift,production_date,qty,total_qty,status)
         VALUES
-        (:pp_code, :line_id, :product_code, :shift, :production_date,
-         :qty, :total_qty, :status, :start, :end)"
-    );
+        (:pp_code,:line_id,:product_code,:shift,:production_date,:qty,:total_qty,'planned')
+    ");
 
-    $validRow = false;
+    $insertDetail = $pdo->prepare("
+        INSERT INTO tbl_detail_production_planning
+        (pp_id,jam,qty,status)
+        VALUES
+        (:pp_id,:jam,:qty,'planned')
+    ");
 
-    foreach ($shifts as $i => $shiftNo) {
+    $hasData = false;
 
-        $shiftNo = (int)$shiftNo;
-        $qty     = (int)($qtys[$i] ?? 0);
-        $start   = sanitize($starts[$i] ?? '');
-        $end     = sanitize($ends[$i] ?? '');
+    foreach ($productCodes as $shiftNo => $products) {
 
-        // skip baris kosong
-        if ($shiftNo <= 0 || $qty <= 0 || $start === '' || $end === '') {
-            continue;
+        foreach ($products as $pIndex => $product) {
+
+            $product = sanitize($product);
+            if ($product == '') continue;
+
+            $total = 0;
+
+            foreach ($qtys[$shiftNo][$pIndex] as $q) {
+                $total += (int)$q;
+            }
+
+            // ================================
+            // TIDAK DISKIP WALAU TOTAL 0
+            // ================================
+            $hasData = true;
+
+            // ================================
+            // INSERT HEADER
+            // ================================
+            $insertPP->execute([
+                ':pp_code' => $ppCode,
+                ':line_id' => $lineId,
+                ':product_code' => $product,
+                ':shift' => $shiftNo,
+                ':production_date' => $productionDate,
+                ':qty' => $total,
+                ':total_qty' => $total
+            ]);
+
+            $ppId = $pdo->lastInsertId();
+
+            // ================================
+            // INSERT DETAIL JAM + OT
+            // ================================
+            foreach ($qtys[$shiftNo][$pIndex] as $j => $q) {
+
+                $jam = sanitize($jams[$shiftNo][$pIndex][$j] ?? '');
+                $q = (int)$q;
+
+                if ($jam == '') continue;
+
+                $insertDetail->execute([
+                    ':pp_id' => $ppId,
+                    ':jam' => $jam,
+                    ':qty' => $q
+                ]);
+            }
         }
-
-        $validRow = true;
-
-        $insert->execute([
-            ':pp_code'         => $ppCode,
-            ':line_id'         => $lineId,
-            ':product_code'    => $productCode,
-            ':shift'           => $shiftNo,
-            ':production_date' => $productionDate,
-            ':qty'             => $qty,
-            ':total_qty'       => $totalQty,
-            ':status'          => 'planned',
-            ':start'           => $start,
-            ':end'             => $end,
-        ]);
     }
 
-    // ❌ tidak ada shift valid
-    if (!$validRow) {
-        throw new Exception('Tidak ada data shift yang valid.');
+    if (!$hasData) {
+        setAlert('error', 'Oops!', 'Tidak ada product.', 'danger', 'OK');
+        redirect('pages/production_planning/');
     }
 
     $pdo->commit();
 
-    setAlert(
-        'success',
-        'Berhasil!',
-        'Production planning berhasil diperbarui.',
-        'success',
-        'Oke'
-    );
-
+    setAlert('success', 'Berhasil', 'Production planning berhasil diupdate', 'success', 'OK');
     redirect('pages/production_planning/');
 } catch (Exception $e) {
-    if ($pdo->inTransaction()) {
-        $pdo->rollBack();
-    }
 
-    handlePdoError(
-        $e,
-        'pages/production_planning/'
-    );
+    if ($pdo->inTransaction()) $pdo->rollBack();
+
+    handlePdoError($e, 'pages/production_planning/');
 }

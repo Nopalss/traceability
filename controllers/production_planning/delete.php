@@ -5,110 +5,80 @@ require_once __DIR__ . '/../../helper/redirect.php';
 require_once __DIR__ . '/../../helper/sanitize.php';
 require_once __DIR__ . '/../../helper/handlePdoError.php';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    redirect('pages/production_planning/');
+}
+
+// ================================
+// INPUT
+// ================================
+$ppCode   = sanitize($_POST['id'] ?? '');
+$username = $_SESSION['username'] ?? '';
+$password = trim($_POST['password'] ?? '');
+
+if ($ppCode === '' || $username === '' || $password === '') {
+
+    setAlert('warning', 'Oops', 'Data tidak lengkap', 'warning', 'OK');
+    redirect('pages/production_planning/');
+}
+
+// ================================
+// VERIFY PASSWORD
+// ================================
+$user = checkLogin($pdo, $username, $password);
+
+if (!$user) {
+
+    setAlert('error', 'Oops', 'Password salah', 'danger', 'OK');
+    redirect('pages/production_planning/');
+}
+
+try {
 
     // ================================
-    // Ambil input (id = pp_code)
+    // CHECK EXIST
     // ================================
-    $ppCode   = isset($_POST['id']) ? sanitize($_POST['id']) : null;
-    $username = $_SESSION['username'] ?? null;
-    $password = trim($_POST['password'] ?? '');
+    $check = $pdo->prepare("SELECT 1 FROM tbl_production_planning WHERE pp_code=? LIMIT 1");
+    $check->execute([$ppCode]);
 
-    // ================================
-    // Validasi dasar
-    // ================================
-    if (empty($ppCode) || empty($password) || empty($username)) {
-        setAlert(
-            'warning',
-            'Oops!',
-            'Data tidak lengkap.',
-            'warning',
-            'Coba Lagi'
-        );
-        return redirect('pages/production_planning/');
+    if (!$check->fetchColumn()) {
+        throw new Exception('Production Planning tidak ditemukan.');
     }
 
+    $pdo->beginTransaction();
+
     // ================================
-    // Verifikasi password user
+    // DELETE DETAIL FIRST
     // ================================
-    $user = checkLogin($pdo, $username, $password);
-    if (!$user) {
-        setAlert(
-            'error',
-            'Oops!',
-            'Password salah.',
-            'danger',
-            'Coba Lagi'
-        );
-        return redirect('pages/production_planning/');
-    }
+    $pdo->prepare("
+        DELETE FROM tbl_detail_production_planning
+        WHERE pp_id IN (
+            SELECT pp_id FROM tbl_production_planning WHERE pp_code=?
+        )
+    ")->execute([$ppCode]);
 
-    try {
-        // ================================
-        // Cek production planning exist
-        // ================================
-        $stmt = $pdo->prepare(
-            "SELECT 1
-             FROM tbl_production_planning
-             WHERE pp_code = :pp_code
-             LIMIT 1"
-        );
-        $stmt->execute([
-            ':pp_code' => $ppCode
-        ]);
+    // ================================
+    // DELETE HEADER (ALL SHIFTS)
+    // ================================
+    $pdo->prepare("
+        DELETE FROM tbl_production_planning
+        WHERE pp_code=?
+    ")->execute([$ppCode]);
 
-        if (!$stmt->fetchColumn()) {
-            throw new Exception('Data Production Planning tidak ditemukan.');
-        }
+    $pdo->commit();
 
-        // ================================
-        // Transaksi delete (hapus semua shift)
-        // ================================
-        $pdo->beginTransaction();
+    setAlert(
+        'success',
+        'Berhasil!',
+        'Production Planning berhasil dihapus.',
+        'success',
+        'OK'
+    );
 
-        $stmt = $pdo->prepare(
-            "DELETE FROM tbl_production_planning
-             WHERE pp_code = :pp_code"
-        );
-        $stmt->execute([
-            ':pp_code' => $ppCode
-        ]);
+    redirect('pages/production_planning/');
+} catch (Exception $e) {
 
-        $pdo->commit();
+    if ($pdo->inTransaction()) $pdo->rollBack();
 
-        setAlert(
-            'success',
-            'Berhasil!',
-            'Production Planning berhasil dihapus.',
-            'success',
-            'Oke'
-        );
-
-        redirect('pages/production_planning/');
-    } catch (PDOException $e) {
-
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-
-        handlePdoError(
-            $e,
-            'pages/production_planning/'
-        );
-    } catch (Exception $e) {
-
-        if ($pdo->inTransaction()) {
-            $pdo->rollBack();
-        }
-
-        setAlert(
-            'error',
-            'Oops!',
-            $e->getMessage(),
-            'danger',
-            'Kembali'
-        );
-
-        redirect('pages/production_planning/');
-    }
+    handlePdoError($e, 'pages/production_planning/');
 }

@@ -49,5 +49,5 @@ require __DIR__ . '/auth.php';
             -moz-appearance: textfield;
         }
     </style>
-    <link rel="shortcut icon" href="<?= BASE_URL ?>assets/media/logo.png" />
+    <link rel="shortcut icon" href="<?= BASE_URL ?>assets/media/logo.ico" />
 </head>

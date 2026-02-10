@@ -96,8 +96,9 @@ function echoActiveClass($currentMenu, $menuName)
                         <!--begin::Menu Nav-->
                         <ul class="menu-nav ">
                             <?php if ($role == "admin"): ?>
-                                <li class="menu-item <?= echoActiveClass($menu, 'dashboard') ?>" aria-haspopup="true">
-                                    <a href="<?= BASE_URL . 'pages/dashboard.php' ?>" class="menu-link ">
+
+                                <li class="menu-item menu-item-submenu <?= echoActiveClass($menu, ['dashboard', 'planning_lookup']) ?>" aria-haspopup="true" data-menu-toggle="hover">
+                                    <a href="javascript:;" class="menu-link menu-toggle">
                                         <span class="svg-icon menu-icon"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
                                                 <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
                                                     <polygon points="0 0 24 0 24 24 0 24" />
@@ -105,8 +106,24 @@ function echoActiveClass($currentMenu, $menuName)
                                                     <path d="M11.0563554,18.6706981 L5.33593024,14.122919 C4.94553994,13.8125559 4.37746707,13.8774308 4.06710397,14.2678211 C4.06471678,14.2708238 4.06234874,14.2738418 4.06,14.2768747 L4.06,14.2768747 C3.75257288,14.6738539 3.82516916,15.244888 4.22214834,15.5523151 C4.22358765,15.5534297 4.2250303,15.55454 4.22647627,15.555646 L11.0872776,20.8031356 C11.6250734,21.2144692 12.371757,21.2145375 12.909628,20.8033023 L19.7677785,15.559828 C20.1693192,15.2528257 20.2459576,14.6784381 19.9389553,14.2768974 C19.9376429,14.2751809 19.9363245,14.2734691 19.935,14.2717619 L19.935,14.2717619 C19.6266937,13.8743807 19.0546209,13.8021712 18.6572397,14.1104775 C18.654352,14.112718 18.6514778,14.1149757 18.6486172,14.1172508 L12.9235044,18.6705218 C12.377022,19.1051477 11.6029199,19.1052208 11.0563554,18.6706981 Z" fill="#000000" opacity="0.3" />
                                                 </g>
                                             </svg></span>
-                                        <span class="menu-text">Dashboard</span>
+                                        <span class="menu-text">Dashboard</span><i class="menu-arrow"></i>
                                     </a>
+                                    <div class="menu-submenu "><i class="menu-arrow"></i>
+                                        <ul class="menu-subnav">
+                                            <li class="menu-item <?= echoActiveClass($menu, 'shift') ?>" aria-haspopup="true">
+                                                <a href="<?= BASE_URL ?>'pages/dashboard.php'" class="menu-link ">
+                                                    <i class="menu-bullet menu-bullet-dot"><span></span></i>
+                                                    <span class="menu-text">Dashboard</span>
+                                                </a>
+                                            </li>
+                                            <li class="menu-item <?= echoActiveClass($menu, 'planning_lookup') ?>" aria-haspopup="true">
+                                                <a href="<?= BASE_URL ?>pages/planning_lookup/" class="menu-link ">
+                                                    <i class="menu-bullet menu-bullet-dot"><span></span></i>
+                                                    <span class="menu-text">Planning Lookup</span>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </li>
 
                                 <li class="menu-item <?= echoActiveClass($menu, 'part_register') ?>" aria-haspopup="true">
@@ -121,6 +138,18 @@ function echoActiveClass($currentMenu, $menuName)
                                         <span class="menu-text">Part Register</span>
                                     </a>
                                 </li>
+                                <li class="menu-item <?= echoActiveClass($menu, 'supplier') ?>" aria-haspopup="true">
+                                    <a href="<?= BASE_URL . 'pages/supplier/' ?>" class="menu-link ">
+                                        <span class="svg-icon menu-icon"><!--begin::Svg Icon | path:C:\wamp64\www\keenthemes\themes\metronic\theme\html\demo1\dist/../src/media/svg/icons\Shopping\Box3.svg--><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
+                                                <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+                                                    <rect x="0" y="0" width="24" height="24" />
+                                                    <path d="M20.4061385,6.73606154 C20.7672665,6.89656288 21,7.25468437 21,7.64987309 L21,16.4115967 C21,16.7747638 20.8031081,17.1093844 20.4856429,17.2857539 L12.4856429,21.7301984 C12.1836204,21.8979887 11.8163796,21.8979887 11.5143571,21.7301984 L3.51435707,17.2857539 C3.19689188,17.1093844 3,16.7747638 3,16.4115967 L3,7.64987309 C3,7.25468437 3.23273352,6.89656288 3.59386153,6.73606154 L11.5938615,3.18050598 C11.8524269,3.06558805 12.1475731,3.06558805 12.4061385,3.18050598 L20.4061385,6.73606154 Z" fill="#000000" opacity="0.3" />
+                                                    <polygon fill="#000000" points="14.9671522 4.22441676 7.5999999 8.31727912 7.5999999 12.9056825 9.5999999 13.9056825 9.5999999 9.49408582 17.25507 5.24126912" />
+                                                </g>
+                                            </svg><!--end::Svg Icon--></span>
+                                        <span class="menu-text">Supplier</span>
+                                    </a>
+                                </li>
                                 <li class="menu-item <?= echoActiveClass($menu, 'part_assy') ?>" aria-haspopup="true">
                                     <a href="<?= BASE_URL . 'pages/part_assy/' ?>" class="menu-link ">
                                         <span class="svg-icon menu-icon"><!--begin::Svg Icon | path:C:\wamp64\www\keenthemes\themes\metronic\theme\html\demo1\dist/../src/media/svg/icons\Code\Puzzle.svg--><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
@@ -132,19 +161,33 @@ function echoActiveClass($currentMenu, $menuName)
                                         <span class="menu-text">Part Assy</span>
                                     </a>
                                 </li>
-                                <li class="menu-item <?= echoActiveClass($menu, 'line_setting') ?>" aria-haspopup="true">
-                                    <a href="<?= BASE_URL . 'pages/line_setting/' ?>" class="menu-link ">
-
-                                        <span class="svg-icon menu-icon"><!--begin::Svg Icon | path:C:\wamp64\www\keenthemes\themes\metronic\theme\html\demo1\dist/../src/media/svg/icons\Code\Git1.svg--><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
+                                <li class="menu-item menu-item-submenu <?= echoActiveClass($menu, ['line_setting', 'shift']) ?>" aria-haspopup="true" data-menu-toggle="hover">
+                                    <a href="javascript:;" class="menu-link menu-toggle">
+                                        <span class="svg-icon menu-icon svg-icon-2x"><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
                                                 <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
                                                     <rect x="0" y="0" width="24" height="24" />
-                                                    <rect fill="#000000" opacity="0.3" x="11" y="8" width="2" height="9" rx="1" />
-                                                    <path d="M12,21 C13.1045695,21 14,20.1045695 14,19 C14,17.8954305 13.1045695,17 12,17 C10.8954305,17 10,17.8954305 10,19 C10,20.1045695 10.8954305,21 12,21 Z M12,23 C9.790861,23 8,21.209139 8,19 C8,16.790861 9.790861,15 12,15 C14.209139,15 16,16.790861 16,19 C16,21.209139 14.209139,23 12,23 Z" fill="#000000" fill-rule="nonzero" />
-                                                    <path d="M12,7 C13.1045695,7 14,6.1045695 14,5 C14,3.8954305 13.1045695,3 12,3 C10.8954305,3 10,3.8954305 10,5 C10,6.1045695 10.8954305,7 12,7 Z M12,9 C9.790861,9 8,7.209139 8,5 C8,2.790861 9.790861,1 12,1 C14.209139,1 16,2.790861 16,5 C16,7.209139 14.209139,9 12,9 Z" fill="#000000" fill-rule="nonzero" />
+                                                    <path d="M2.56066017,10.6819805 L4.68198052,8.56066017 C5.26776695,7.97487373 6.21751442,7.97487373 6.80330086,8.56066017 L8.9246212,10.6819805 C9.51040764,11.267767 9.51040764,12.2175144 8.9246212,12.8033009 L6.80330086,14.9246212 C6.21751442,15.5104076 5.26776695,15.5104076 4.68198052,14.9246212 L2.56066017,12.8033009 C1.97487373,12.2175144 1.97487373,11.267767 2.56066017,10.6819805 Z M14.5606602,10.6819805 L16.6819805,8.56066017 C17.267767,7.97487373 18.2175144,7.97487373 18.8033009,8.56066017 L20.9246212,10.6819805 C21.5104076,11.267767 21.5104076,12.2175144 20.9246212,12.8033009 L18.8033009,14.9246212 C18.2175144,15.5104076 17.267767,15.5104076 16.6819805,14.9246212 L14.5606602,12.8033009 C13.9748737,12.2175144 13.9748737,11.267767 14.5606602,10.6819805 Z" fill="#000000" opacity="0.3" />
+                                                    <path d="M8.56066017,16.6819805 L10.6819805,14.5606602 C11.267767,13.9748737 12.2175144,13.9748737 12.8033009,14.5606602 L14.9246212,16.6819805 C15.5104076,17.267767 15.5104076,18.2175144 14.9246212,18.8033009 L12.8033009,20.9246212 C12.2175144,21.5104076 11.267767,21.5104076 10.6819805,20.9246212 L8.56066017,18.8033009 C7.97487373,18.2175144 7.97487373,17.267767 8.56066017,16.6819805 Z M8.56066017,4.68198052 L10.6819805,2.56066017 C11.267767,1.97487373 12.2175144,1.97487373 12.8033009,2.56066017 L14.9246212,4.68198052 C15.5104076,5.26776695 15.5104076,6.21751442 14.9246212,6.80330086 L12.8033009,8.9246212 C12.2175144,9.51040764 11.267767,9.51040764 10.6819805,8.9246212 L8.56066017,6.80330086 C7.97487373,6.21751442 7.97487373,5.26776695 8.56066017,4.68198052 Z" fill="#000000" />
                                                 </g>
-                                            </svg><!--end::Svg Icon--></span>
-                                        <span class="menu-text">Line Setting</span>
+                                            </svg></span>
+                                        <span class="menu-text">Settings</span><i class="menu-arrow"></i>
                                     </a>
+                                    <div class="menu-submenu "><i class="menu-arrow"></i>
+                                        <ul class="menu-subnav">
+                                            <li class="menu-item <?= echoActiveClass($menu, 'shift') ?>" aria-haspopup="true">
+                                                <a href="<?= BASE_URL ?>pages/shift/" class="menu-link ">
+                                                    <i class="menu-bullet menu-bullet-dot"><span></span></i>
+                                                    <span class="menu-text">Shift Setting</span>
+                                                </a>
+                                            </li>
+                                            <li class="menu-item <?= echoActiveClass($menu, 'line_setting') ?>" aria-haspopup="true">
+                                                <a href="<?= BASE_URL ?>pages/line_setting/" class="menu-link ">
+                                                    <i class="menu-bullet menu-bullet-dot"><span></span></i>
+                                                    <span class="menu-text">Line Setting</span>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
                                 </li>
                                 <li class="menu-item <?= echoActiveClass($menu, 'production_planning') ?>" aria-haspopup="true">
                                     <a href="<?= BASE_URL . 'pages/production_planning/' ?>" class="menu-link ">

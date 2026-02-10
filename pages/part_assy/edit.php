@@ -2,37 +2,33 @@
 require_once __DIR__ . '/../../includes/config.php';
 
 $partAssy = $_GET['part_assy'] ?? '';
-if ($partAssy === '') {
-    redirect('pages/part_assy/');
-}
+if ($partAssy === '') redirect('pages/part_assy/');
 
-// ambil master part
 $parts = $pdo->query("
     SELECT part_code, part_name 
     FROM tbl_part 
     ORDER BY part_code
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-// ambil BOM existing
 $stmt = $pdo->prepare("
     SELECT pa.part_code, pa.qty, p.part_name
     FROM tbl_part_assy pa
     JOIN tbl_part p ON pa.part_code = p.part_code
     WHERE pa.part_assy = :part_assy
 ");
-
-$_SESSION['halaman'] = 'part assy';
-$_SESSION['menu']    = 'part_assy';
-$_SESSION['subHalaman'] = ' | Edit Part Assy | ' . $partAssy;
 $stmt->execute([':part_assy' => $partAssy]);
 $items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$_SESSION['halaman'] = 'part assy';
+$_SESSION['menu'] = 'part_assy';
+$_SESSION['subHalaman'] = ' | Edit Part Assy | ' . $partAssy;
 
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
 ?>
 
-<div class="content d-flex flex-column flex-column-fluid pt-0" id="kt_content">
+<div class="content d-flex flex-column flex-column-fluid pt-0">
     <div class="container">
         <div class="row justify-content-center">
             <div class="col-lg-9">
@@ -65,7 +61,9 @@ require __DIR__ . '/../../includes/navbar.php';
                                         <th>Action</th>
                                     </tr>
                                 </thead>
+
                                 <tbody id="assyTableBody">
+
                                     <?php foreach ($items as $i => $row): ?>
                                         <tr>
                                             <td class="row-no"><?= $i + 1 ?></td>
@@ -74,17 +72,23 @@ require __DIR__ . '/../../includes/navbar.php';
                                                     <option value="">select</option>
                                                     <?php foreach ($parts as $p): ?>
                                                         <option value="<?= $p['part_code'] ?>"
-                                                            <?= $p['part_code'] === $row['part_code'] ? 'selected' : '' ?>
-                                                            data-name="<?= htmlspecialchars($p['part_name']) ?>">
-                                                            <?= $p['part_code'] ?>
+                                                            data-name="<?= htmlspecialchars($p['part_name']) ?>"
+                                                            <?= $p['part_code'] === $row['part_code'] ? 'selected' : '' ?>>
+                                                            <?= $p['part_code'] ?> - <?= $p['part_name'] ?>
                                                         </option>
-                                                    <?php endforeach; ?>
+                                                    <?php endforeach ?>
                                                 </select>
                                             </td>
                                             <td class="part-name"><?= htmlspecialchars($row['part_name']) ?></td>
-                                            <td style="font-size: 0.85rem; width: 3rem;">
-                                                <input type="number" name="items[<?= $i ?>][qty]" class="form-control form-control-sm" oninput="this.value = this.value < 1 ? '' : this.value"
-                                                    min="1" value="<?= $row['qty'] ?>" required>
+                                            <td style="font-size:.85rem;width:3rem">
+                                                <input type="number"
+                                                    name="items[<?= $i ?>][qty]"
+                                                    class="form-control form-control-sm qty"
+                                                    min="1"
+                                                    value="<?= $row['qty'] ?>"
+                                                    onwheel="this.blur()"
+                                                    oninput="this.value=this.value<1?'':this.value"
+                                                    required>
                                             </td>
                                             <td>
                                                 <button type="button" class="btn btn-sm btn-danger btn-remove">
@@ -92,13 +96,14 @@ require __DIR__ . '/../../includes/navbar.php';
                                                 </button>
                                             </td>
                                         </tr>
-                                    <?php endforeach; ?>
+                                    <?php endforeach ?>
+
                                 </tbody>
                             </table>
 
                             <div class="text-right mt-10">
                                 <a href="<?= BASE_URL ?>pages/part_assy/" class="btn btn-outline-danger">Batal</a>
-                                <button type="submit" class="btn btn-success">Update</button>
+                                <button class="btn btn-success">Update</button>
                             </div>
 
                         </form>
@@ -108,71 +113,107 @@ require __DIR__ . '/../../includes/navbar.php';
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    const parts = <?= json_encode($parts) ?>;
+    <script>
+        const parts = <?= json_encode($parts) ?>;
+        const partAssy = "<?= $partAssy ?>";
 
-    function renumber() {
-        document.querySelectorAll('#assyTableBody .row-no')
-            .forEach((td, i) => td.innerText = i + 1);
-    }
+        function renumber() {
+            document.querySelectorAll('.row-no').forEach((e, i) => e.innerText = i + 1);
+        }
 
-    document.getElementById('btnAddRow').addEventListener('click', function() {
-        const tbody = document.getElementById('assyTableBody');
-        const index = tbody.children.length;
+        function getUsed() {
+            let arr = [];
+            document.querySelectorAll('.part-select').forEach(s => {
+                if (s.value) arr.push(s.value);
+            });
+            return arr;
+        }
 
-        let options = '<option value="">select</option>';
-        parts.forEach(p => {
-            options += `<option value="${p.part_code}" data-name="${p.part_name}">${p.part_code}</option>`;
+        function refreshOptions() {
+
+            const used = getUsed();
+
+            document.querySelectorAll('.part-select').forEach(select => {
+
+                [...select.options].forEach(opt => {
+                    if (!opt.value) return;
+
+                    let disable = false;
+
+                    if (opt.value === partAssy) disable = true;
+                    if (used.includes(opt.value) && opt.value !== select.value) disable = true;
+
+                    opt.disabled = disable;
+
+                    if (disable) {
+                        opt.textContent = '❌ ' + opt.value + ' - ' + opt.dataset.name;
+                        opt.style.color = '#dc3545';
+                    } else {
+                        opt.textContent = opt.value + ' - ' + opt.dataset.name;
+                        opt.style.color = '';
+                    }
+
+                });
+
+            });
+        }
+
+        /* ADD ROW */
+        document.getElementById('btnAddRow').addEventListener('click', () => {
+
+            const tbody = document.getElementById('assyTableBody');
+            const idx = tbody.children.length;
+
+            let opts = '<option value="">select</option>';
+            parts.forEach(p => {
+                opts += `<option value="${p.part_code}" data-name="${p.part_name}">${p.part_code} - ${p.part_name}</option>`;
+            });
+
+            tbody.insertAdjacentHTML('beforeend', `
+<tr>
+<td class="row-no"></td>
+<td><select name="items[${idx}][part_code]" class="form-control form-control-sm part-select" required>${opts}</select></td>
+<td class="part-name">-</td>
+<td style="font-size:.85rem;width:3rem">
+<input type="number" name="items[${idx}][qty]" class="form-control form-control-sm qty"
+min="1" onwheel="this.blur()" oninput="this.value=this.value<1?'':this.value" required>
+</td>
+<td><button type="button" class="btn btn-sm btn-danger btn-remove"><i class="flaticon-delete"></i></button></td>
+</tr>`);
+
+            renumber();
+            refreshOptions();
+
         });
 
-        tbody.insertAdjacentHTML('beforeend', `
-        <tr>
-            <td class="row-no"></td>
-            <td>
-                <select name="items[${index}][part_code]"
-                        class="form-control form-control-sm part-select"
-                        required>
-                    ${options}
-                </select>
-            </td>
-            <td class="part-name">-</td>
-            <td style="font-size:0.85rem;width:3rem;">
-                <input type="number"
-                       name="items[${index}][qty]"
-                       class="form-control form-control-sm"
-                       min="1"
-                       oninput="this.value = this.value < 1 ? '' : this.value"
-                       required>
-            </td>
-            <td>
-                <button type="button" class="btn btn-sm btn-danger btn-remove">
-                    <i class="flaticon-delete"></i>
-                </button>
-            </td>
-        </tr>
-    `);
+        /* REMOVE */
+        document.addEventListener('click', e => {
+            if (e.target.closest('.btn-remove')) {
+                e.target.closest('tr').remove();
+                renumber();
+                refreshOptions();
+            }
+        });
 
-        renumber();
-    });
+        /* CHANGE */
+        document.addEventListener('change', e => {
+            if (e.target.classList.contains('part-select')) {
+                const name = e.target.selectedOptions[0]?.dataset.name || '-';
+                e.target.closest('tr').querySelector('.part-name').innerText = name;
+                refreshOptions();
+            }
+        });
 
-    // REMOVE ROW
-    document.addEventListener('click', function(e) {
-        if (e.target.closest('.btn-remove')) {
-            e.target.closest('tr').remove();
-            renumber();
-        }
-    });
+        /* DISABLE ARROW UP/DOWN */
+        document.addEventListener('keydown', function(e) {
+            if (e.target.type === 'number' && (e.which === 38 || e.which === 40)) {
+                e.preventDefault();
+            }
+        });
 
-    // UPDATE PART NAME
-    document.addEventListener('change', function(e) {
-        if (e.target.classList.contains('part-select')) {
-            const name = e.target.selectedOptions[0]?.dataset.name || '-';
-            e.target.closest('tr').querySelector('.part-name').innerText = name;
-        }
-    });
-</script>
+        /* INIT */
+        refreshOptions();
+    </script>
 
-
-<?php require __DIR__ . '/../../includes/footer.php'; ?>
+    <?php require __DIR__ . '/../../includes/footer.php'; ?>

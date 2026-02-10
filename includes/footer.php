@@ -130,6 +130,12 @@ $rule = $_SESSION['rule'] ?? null;
 <?php if ($menu == "line_setting"): ?>
     <script src="<?= BASE_URL ?>assets/js/line/script.js"></script>
 <?php endif; ?>
+<?php if ($menu == "supplier"): ?>
+    <script src="<?= BASE_URL ?>assets/js/supplier/script.js"></script>
+<?php endif; ?>
+<?php if ($menu == "shift"): ?>
+    <script src="<?= BASE_URL ?>assets/js/shift/script.js"></script>
+<?php endif; ?>
 <script>
     // ==================================================================
     // BAGIAN 1: DEFINISI FUNGSI

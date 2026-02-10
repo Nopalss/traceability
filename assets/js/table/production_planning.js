@@ -34,29 +34,33 @@ var KTDatatableLocalSortDemo = function () {
 
             columns: [
                 {
+                    field: 'pp_id',
+                    title: '#',
+                    textAlign: 'center',
+                    width: 30,
+                    template: function (row, index, datatable) {
+                        return `<span style="font-size:0.975rem">${index + 1}</span>`
+                    },
+                },
+                {
                     field: 'line_name',
                     title: 'Line',
                     template: row => `<span style="font-size:0.975rem">${row.line_name}</span>`
                 },
                 {
-                    field: 'product_code',
-                    title: 'Product Code',
-                    template: row => `<span style="font-size:0.875rem">${row.product_code}</span>`
+                    field: 'jumlah_shift',
+                    title: 'Jumlah Shift',
+                    template: row => `<span style="font-size:0.875rem">${row.jumlah_shift}</span>`
+                },
+                {
+                    field: 'product_count',
+                    title: 'Jumlah Product',
+                    template: row => `<span style="font-size:0.875rem">${row.product_count}</span>`
                 },
                 {
                     field: 'production_date',
                     title: 'Date',
                     template: row => `<span style="font-size:0.875rem">${row.production_date}</span>`
-                },
-                {
-                    field: 'total_qty',
-                    title: 'QTY',
-                    template: row => `<span style="font-size:0.875rem">${row.total_qty}</span>`
-                },
-                {
-                    field: 'status',
-                    title: 'Status',
-                    template: row => `<span style="font-size:0.875rem">${row.status}</span>`
                 },
                 {
                     field: 'Actions',
