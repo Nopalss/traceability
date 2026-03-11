@@ -15,6 +15,23 @@ $http_host = $_SERVER['HTTP_HOST'] ?? 'localhost';
 define('BASE_URL', "http://{$http_host}/traceability/");
 define('VERSION', 'V1.0.0');
 
+// // Deteksi apakah HTTPS atau HTTP
+// $isHttps = (
+//     (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ||
+//     (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443)
+// );
+// $protocol = $isHttps ? 'https://' : 'http://';
+
+// // Ambil host (misalnya localhost, 103.147.82.5, atau domain)
+// $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+
+// // Ambil folder project (misalnya /cms)
+// $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+// $parts = explode('/', trim($scriptName, '/'));
+// $projectFolder = isset($parts[0]) ? '/' . $parts[0] : '';
+
+// // Gabungkan semuanya
+// $baseUrl = $protocol . $host . $projectFolder . '/';
 // --- PDO CONFIG ---
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 

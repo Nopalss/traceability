@@ -99,20 +99,18 @@ require __DIR__ . '/../../includes/navbar.php';
                                             Kembali
                                         </a>
 
-                                        <button
+                                        <!-- <button
                                             type="button"
                                             id="btn-add"
                                             class="btn btn-success btn-sm"
                                             disabled>
                                             Add
-                                        </button>
+                                        </button> -->
                                     </div>
                                 </form>
-
                             </div>
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>

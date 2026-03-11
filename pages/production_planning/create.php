@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__ . '/../../includes/config.php';
 
-$sql = "SELECT part_code, part_name FROM tbl_part ORDER BY part_code ASC";
+$sql = "SELECT part_code, part_name FROM tbl_part WHERE status_assy = 1  ORDER BY part_code ASC";
 $parts = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 
 $sql = "SELECT line_id, line_name FROM tbl_line ORDER BY line_name ASC";
@@ -75,7 +75,7 @@ require __DIR__ . '/../../includes/navbar.php';
 
                     <div class="text-right mt-7">
                         <a href="<?= BASE_URL ?>pages/production_planning/" class="btn btn-outline-danger">Batal</a>
-                        <button class="btn btn-success">Submit</button>
+                        <button class="btn btn-success" id="submitBtn">Submit</button>
                     </div>
 
                 </form>
@@ -90,37 +90,22 @@ require __DIR__ . '/../../includes/navbar.php';
 <script>
     let shifts = <?= json_encode($shifts) ?>;
 
-    /* ===============================
-       DATE INPUT BEHAVIOR
-    ================================ */
-
     $('input[type="date"]').on('click focus', function() {
         this.showPicker();
     });
-
-    /* ===============================
-       DISABLE NUMBER SCROLL + ARROW
-    ================================ */
 
     $(document).on('wheel', 'input[type=number]', function(e) {
         $(this).blur();
     });
 
     $(document).on('keydown', 'input[type=number]', function(e) {
-        if (e.which === 38 || e.which === 40) {
-            e.preventDefault();
-        }
+        if (e.which === 38 || e.which === 40) e.preventDefault();
     });
 
-    /* =============================== */
-
     $('#shiftCount').change(function() {
-
         $('#shiftWrapper').html('');
         let count = parseInt($(this).val());
-
         for (let s = 1; s <= count; s++) renderShift(s);
-
     });
 
     function renderShift(shiftNo) {
@@ -138,28 +123,20 @@ require __DIR__ . '/../../includes/navbar.php';
         let html = `
 <div class="card shift-card p-5 mt-5" data-shift="${shiftNo}">
 <h5>Shift ${shiftNo}</h5>
-
 <div class="products"></div>
-
 <button type="button" class="btn btn-sm btn-primary addProduct mt-3">+ Product</button>
 </div>`;
 
         $('#shiftWrapper').append(html);
-
         let card = $('#shiftWrapper .shift-card').last();
         card.data('hours', hours);
-
         addProduct(card, shiftNo);
-
     }
 
     $(document).on('click', '.addProduct', function() {
-
         let card = $(this).closest('.shift-card');
         let shiftNo = card.data('shift');
-
         addProduct(card, shiftNo);
-
     });
 
     function addProduct(card, shiftNo) {
@@ -168,10 +145,9 @@ require __DIR__ . '/../../includes/navbar.php';
         let idx = card.find('.product-card').length;
 
         let html = `<div class="product-card">
-
 <button type="button" class="btn btn-sm btn-danger remove-product">×</button>
 
-<select name="product_code[${shiftNo}][]" class="form-control mb-3" required>
+<select name="product_code[${shiftNo}][]" class="form-control mb-3 product-select" required>
 <option value="">Select Product</option>
 <?php foreach ($parts as $p): ?>
 <option value="<?= $p['part_code'] ?>"><?= $p['part_code'] ?> - <?= $p['part_name'] ?></option>
@@ -186,8 +162,15 @@ require __DIR__ . '/../../includes/navbar.php';
 <tr>
 <td>${h}:00 - ${n}:00</td>
 <td>
-<input type="number" min="0" step="1" class="form-control qty" name="qty[${shiftNo}][${idx}][]" value="0">
-<input type="hidden" name="jam[${shiftNo}][${idx}][]" value="${h}:00-${n}:00">
+<input type="number"
+       min="0"
+       step="1"
+       class="form-control qty"
+       name="qty[${shiftNo}][${idx}][]"
+       value="0">
+<input type="hidden"
+       name="jam[${shiftNo}][${idx}][]"
+       value="${h}:00-${n}:00">
 </td>
 </tr>`;
         });
@@ -196,44 +179,44 @@ require __DIR__ . '/../../includes/navbar.php';
 <tr>
 <td><b>Overtime</b></td>
 <td>
-<input type="number" min="0" step="1" class="form-control qty" name="qty[${shiftNo}][${idx}][]" value="0">
-<input type="hidden" name="jam[${shiftNo}][${idx}][]" value="OT">
+<input type="number"
+       min="0"
+       step="1"
+       class="form-control qty"
+       name="qty[${shiftNo}][${idx}][]"
+       value="0">
+<input type="hidden"
+       name="jam[${shiftNo}][${idx}][]"
+       value="OT">
 </td>
 </tr>
-
+`;
+        html += `
 <tr><td><b>Total</b></td><td><b class="total">0</b></td></tr>
 </table>
+
+<div class="material-status mt-2"></div>
 </div>`;
-
         card.find('.products').append(html);
-
         toggleRemove(card);
-
     }
 
     $(document).on('click', '.remove-product', function() {
-
         let card = $(this).closest('.shift-card');
         $(this).closest('.product-card').remove();
         toggleRemove(card);
-
+        validateAll();
     });
 
     function toggleRemove(card) {
-
         let count = card.find('.product-card').length;
-
-        if (count <= 1) {
-            card.find('.remove-product').hide();
-        } else {
-            card.find('.remove-product').show();
-        }
-
+        if (count <= 1) card.find('.remove-product').hide();
+        else card.find('.remove-product').show();
     }
 
-    $(document).on('input', '.qty', function() {
+    $(document).on('input change', '.qty, .product-select', function() {
 
-        if ($(this).val() < 0) $(this).val(0);
+        if ($(this).hasClass('qty') && $(this).val() < 0) $(this).val(0);
 
         let box = $(this).closest('.product-card');
         let sum = 0;
@@ -244,7 +227,76 @@ require __DIR__ . '/../../includes/navbar.php';
 
         box.find('.total').text(sum);
 
+        validateAll();
     });
+
+    function validateAll() {
+
+        let products = [];
+
+        $('.product-card').each(function() {
+
+            let productCode = $(this).find('.product-select').val();
+            let total = parseInt($(this).find('.total').text()) || 0;
+
+            if (productCode && total > 0) {
+                products.push({
+                    product_code: productCode,
+                    qty: total
+                });
+            }
+        });
+
+        if (products.length === 0) {
+            $('.material-status').html('');
+            $('#submitBtn').prop('disabled', false);
+            return;
+        }
+
+        $.post(
+            "<?= BASE_URL ?>controllers/production_planning/check_material_global.php", {
+                products: products
+            },
+            function(res) {
+
+                $('.material-status').html('');
+
+                let adaKekurangan = false;
+
+                res.details.forEach(d => {
+
+                    $('.product-card').each(function() {
+
+                        let code = $(this).find('.product-select').val();
+
+                        if (String(code) === String(d.product)) {
+
+                            let alertClass = d.status === 'kurang' ?
+                                'alert-danger' :
+                                'alert-success';
+
+                            if (d.status === 'kurang') {
+                                adaKekurangan = true;
+                            }
+
+                            $(this).find('.material-status').append(
+                                `<div class="alert ${alertClass} py-2 mb-2">
+                                <b>${d.part_name}</b><br>
+                                Kebutuhan: ${d.needed}<br>
+                                Stok Tersedia: ${d.available}<br>
+                                Kekurangan: ${d.shortage}
+                            </div>`
+                            );
+                        }
+                    });
+                });
+
+                $('#submitBtn').prop('disabled', adaKekurangan);
+
+            },
+            'json'
+        );
+    }
 </script>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>

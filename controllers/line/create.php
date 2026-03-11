@@ -1,70 +1,78 @@
 <?php
-// 1. TENTUKAN HEADER SEBAGAI JSON
-// Ini sangat penting untuk respons AJAX
+
 header('Content-Type: application/json');
 
-// 2. MASUKKAN FILE KONFIGURASI DAN HELPER
-require_once __DIR__ . '/../../includes/config.php'; // (Menyediakan $pdo dan memulai session)
-require_once __DIR__ . '/../../helper/sanitize.php'; // (Menyediakan sanitize())
+require_once __DIR__ . '/../../includes/config.php';
+require_once __DIR__ . '/../../helper/sanitize.php';
 
-// 3. SIAPKAN RESPONS DEFAULT
 $response = [
     'success' => false,
     'message' => 'Invalid request.'
 ];
 
-// 4. HANYA PROSES JIKA METODENYA POST
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
-        // 5. BACA DATA JSON DARI FETCH
-        // Bukan dari $_POST, tapi dari 'body' request
+
         $json_data = file_get_contents('php://input');
         $data = json_decode($json_data, true);
 
-        // 6. VALIDASI DAN SANITASI INPUT
         $line_name = sanitize($data['line_name'] ?? '');
 
         if (empty($line_name)) {
-            // Jika input kosong, kirim pesan error
-            $response['message'] = 'Nama line (line_name) tidak boleh kosong.';
+            $response['message'] = 'Nama line tidak boleh kosong.';
         } else {
-            // 7. PROSES DATABASE (mengikuti gaya example Anda)
+
+            // password = line_name → HASH
+            $hashedPassword = password_hash($line_name, PASSWORD_BCRYPT);
+
             $pdo->beginTransaction();
 
-            // Asumsi tabel Anda adalah 'tbl_line' dan Anda ingin mencatat 'create_by'
-            // seperti di contoh Anda.
-            $sql = "INSERT INTO tbl_line (line_name, created_by) 
-                    VALUES (:line_name, :create_by)";
+            /**
+             * =============================
+             * 1. INSERT KE tbl_line
+             * =============================
+             */
+            $sqlLine = "INSERT INTO tbl_line (line_name, created_by)
+                        VALUES (:line_name, :created_by)";
 
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([
-                ':line_name' => $line_name,
-                ':create_by' => $_SESSION['username'] // Asumsi config.php sudah session_start()
+            $stmtLine = $pdo->prepare($sqlLine);
+            $stmtLine->execute([
+                ':line_name'  => $line_name,
+                ':created_by' => $_SESSION['username']
+            ]);
+
+            /**
+             * =============================
+             * 2. INSERT KE tbl_user
+             * =============================
+             */
+            $sqlUser = "INSERT INTO tbl_user (username, password, rule)
+                        VALUES (:username, :password, :rule)";
+
+            $stmtUser = $pdo->prepare($sqlUser);
+            $stmtUser->execute([
+                ':username' => $line_name,
+                ':password' => $hashedPassword,
+                ':rule'     => 'line'
             ]);
 
             $pdo->commit();
 
-            // 8. KIRIM RESPONS SUKSES
             $response['success'] = true;
-            $response['message'] = "Data line '$line_name' berhasil ditambahkan!";
+            $response['message'] = "Line '$line_name' berhasil dibuat.";
         }
     } catch (PDOException $e) {
-        // 9. TANGANI ERROR DATABASE (PDO)
+
         if ($pdo->inTransaction()) {
             $pdo->rollBack();
         }
-        // Kirim error sebagai JSON, jangan panggil handlePdoError()
-        // karena itu mungkin akan me-redirect, yang tidak kita inginkan.
-        $response['message'] = 'Database Error: ' . $e->getMessage();
-        // Untuk produksi, Anda mungkin ingin pesan yang lebih umum:
-        // $response['message'] = 'Terjadi kesalahan pada server saat menyimpan data.';
 
+        $response['message'] = 'Database Error: ' . $e->getMessage();
     } catch (Exception $e) {
-        // 10. TANGANI ERROR UMUM LAINNYA
+
         $response['message'] = $e->getMessage();
     }
 }
 
-// 11. KIRIM RESPONS AKHIR SEBAGAI JSON
 echo json_encode($response);
 exit;

@@ -1,24 +1,17 @@
 (() => {
-    // ===============================
-    // ELEMENT & API
-    // ===============================
+
     const container = document.getElementById('scan-container');
     if (!container) return;
 
     const apiScan = container.dataset.apiScan;
-    const apiAdd = container.dataset.apiAdd;
-
     if (!apiScan) {
-        console.error('API SCAN tidak ditemukan');
+        console.error('API Scan tidak ditemukan');
         return;
     }
 
     const btnExecute = document.getElementById('btn-execute');
-    const btnAdd = document.getElementById('btn-add');
-
     const inputRaw = document.getElementById('qr_raw');
     const alertBox = document.getElementById('scan-alert');
-    const rawSaved = document.getElementById('qr_raw_saved');
 
     const field = {
         part_code: document.getElementById('part_code'),
@@ -28,10 +21,47 @@
         remarks: document.getElementById('remarks')
     };
 
-    // ===============================
-    // ALERT
-    // ===============================
+    /* ===============================
+       AUTO FOCUS SCANNER
+    =============================== */
+
+    function focusScanner() {
+        if (inputRaw) inputRaw.focus();
+    }
+
+    window.addEventListener('load', focusScanner);
+
+    document.addEventListener('click', () => {
+        focusScanner();
+    });
+
+
+    /* ===============================
+       DETECT SCAN (ENTER / NEWLINE)
+    =============================== */
+
+    inputRaw.addEventListener('input', () => {
+
+        const value = inputRaw.value;
+
+        // scanner biasanya menambahkan newline
+        if (value.includes('\n') || value.includes('\r')) {
+
+            const cleaned = value.replace(/[\r\n]/g, '').trim();
+            inputRaw.value = cleaned;
+
+            btnExecute.click();
+        }
+
+    });
+
+
+    /* ===============================
+       ALERT
+    =============================== */
+
     function showAlert(type, message) {
+
         if (!alertBox) return;
 
         alertBox.classList.remove('d-none', 'alert-success', 'alert-danger');
@@ -40,30 +70,43 @@
 
         setTimeout(() => {
             alertBox.classList.add('d-none');
-        }, 5000);
+        }, 4000);
     }
 
-    // ===============================
-    // FORM HANDLER
-    // ===============================
+
+    /* ===============================
+       FORM
+    =============================== */
+
     function fillForm(data = {}) {
+
         field.part_code.value = data.part_code || '';
         field.lot_no.value = data.lot_no || '';
         field.qty.value = data.qty || '';
         field.ref_no.value = data.ref_no || '';
         field.remarks.value = data.remarks || '';
+
     }
 
-    function clearForm() {
-        Object.values(field).forEach(el => el.value = '');
-        rawSaved.value = '';
-        btnAdd.disabled = true;
+
+    /* ===============================
+       CLEAR RAW
+    =============================== */
+
+    function clearRaw() {
+
+        inputRaw.value = '';
+        focusScanner();
+
     }
 
-    // ===============================
-    // EXECUTE (SCAN & PARSE SAJA)
-    // ===============================
+
+    /* ===============================
+       EXECUTE
+    =============================== */
+
     btnExecute.addEventListener('click', () => {
+
         const raw = inputRaw.value.trim();
 
         if (!raw) {
@@ -78,72 +121,36 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ qr_raw: raw })
         })
-            .then(res => res.json())
             .then(res => {
+                if (!res.ok) throw new Error("HTTP error");
+                return res.json();
+            })
+            .then(res => {
+
+                btnExecute.disabled = false;
+
                 if (!res.success) {
                     showAlert('error', res.message || 'QR tidak valid');
-
-                    clearForm();          // ✅ PENTING
-                    btnExecute.disabled = false;
+                    clearRaw();
                     return;
                 }
 
-                // ✅ SUCCESS BARU ISI FORM
-                fillForm(res.data);
-                rawSaved.value = raw;
-                btnAdd.disabled = false;
+                if (res.data) fillForm(res.data);
 
-                showAlert('success', 'QR berhasil diparsing');
-                btnExecute.disabled = false;
+                showAlert('success', res.message || 'Incoming berhasil');
+
+                clearRaw();
+
             })
             .catch(err => {
+
                 console.error(err);
-                showAlert('error', 'Gagal koneksi ke server');
-                clearForm();
                 btnExecute.disabled = false;
+                showAlert('error', 'Server tidak merespon');
+                clearRaw();
+
             });
-    });
 
-
-    // ===============================
-    // ADD (SIMPAN DATA)
-    // ===============================
-    btnAdd.addEventListener('click', () => {
-        if (!apiAdd) {
-            showAlert('error', 'API Add tidak tersedia');
-            return;
-        }
-
-        const raw = rawSaved.value;
-        if (!raw) {
-            showAlert('error', 'Data QR belum diproses');
-            return;
-        }
-
-        btnAdd.disabled = true;
-
-        fetch(apiAdd, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ qr_raw: raw })
-        })
-            .then(res => res.json())
-            .then(res => {
-                if (!res.success) {
-                    showAlert('error', res.message || 'Gagal simpan data');
-                    btnAdd.disabled = false;
-                    return;
-                }
-
-                showAlert('success', 'Incoming part berhasil disimpan');
-                clearForm();
-                inputRaw.value = '';
-            })
-            .catch(err => {
-                console.error(err);
-                showAlert('error', 'Gagal koneksi ke server');
-                btnAdd.disabled = false;
-            });
     });
 
 })();

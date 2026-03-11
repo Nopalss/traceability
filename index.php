@@ -1,136 +1,207 @@
 <?php
-// Diasumsikan session_start() sudah ada di dalam controller ini.
-// Jika tidak, Anda HARUS menambahkannya di sini.
-// session_start(); 
 require __DIR__ . "/controllers/login.php";
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
-    <meta charset="utf-8" />
+    <meta charset="utf-8">
     <title>Traceability | Login</title>
-    <meta name="description" content="Login page example" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
 
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Poppins:300,400,500,600,700" />
-    <link href="assets/css/pages/login/login-4.css" rel="stylesheet" type="text/css" />
-    <link href="assets/plugins/global/plugins.bundle.css" rel="stylesheet" type="text/css" />
-    <link href="assets/css/style.bundle.css" rel="stylesheet" type="text/css" />
-    <!-- <link rel="shortcut icon" href="assets/media/favicon.ico" /> -->
+    <!-- <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet"> -->
+
+    <link href="<?= BASE_URL ?>assets/plugins/global/plugins.bundle.css" rel="stylesheet" type="text/css" />
+    <link href="<?= BASE_URL ?>assets/plugins/custom/prismjs/prismjs.bundle.css" rel="stylesheet" type="text/css" />
+
+    <link href="<?= BASE_URL ?>assets/css/style.bundle.css" rel="stylesheet" type="text/css" />
+    <style>
+        body {
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            font-family: Inter, sans-serif;
+        }
+
+        .login-card {
+            backdrop-filter: blur(15px);
+            background: rgba(255, 255, 255, .08);
+            border-radius: 20px;
+            padding: 40px;
+            width: 380px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, .4);
+        }
+
+        input {
+            border-radius: 12px !important;
+        }
+
+        .login-btn {
+            border-radius: 12px;
+            padding: 12px;
+        }
+    </style>
 </head>
 
-<body id="kt_body" class="page-loading">
+<body class="d-flex justify-content-center align-items-center vh-100">
 
-    <div class="d-flex flex-column flex-root">
-        <div class="login login-4 login-signin-on d-flex flex-row-fluid" id="kt_login">
-            <div class="d-flex flex-center flex-row-fluid bgi-size-cover bgi-position-top bgi-no-repeat" style="background-image: url('assets/media/bg/bg-2.jpg');">
-                <div class="login-form text-center p-7 position-relative overflow-hidden">
-                    <div class="d-flex flex-center mb-3">
-                        <a href="#">
-                        </a>
-                    </div>
-                    <div class="login-signin">
-                        <div class="mb-15">
-                            <h1 class="text-white">Sign In</h1>
-                            <div class="text-muted font-weight-bold">Enter your details to login to your account:</div>
+    <div class="login-card text-center text-white">
 
-                        </div>
-                        <form class="form" id="kt_login_signin_form" method="post">
-                            <div class="form-group mb-5">
-                                <input class="form-control h-auto form-control-solid py-4 px-8" type="text" placeholder="Username" name="username" required autocomplete="off" />
-                            </div>
-                            <div class="form-group mb-5">
-                                <input class="form-control h-auto form-control-solid py-4 px-8" type="password" placeholder="Password" required name="password" />
-                            </div>
-                            <button id="kt_login_signin_submit" type="submit" name="login" class="btn btn-primary font-weight-bold px-9 py-4 my-3 mx-4">Sign In</button>
-                        </form>
-                    </div>
-                </div>
-            </div>
+        <h2 class="mb-2">Traceability</h2>
+        <p class="text-muted mb-5">Manufacturing Login System</p>
 
-        </div>
+        <form method="post">
+
+            <input class="form-control mb-4" name="username" placeholder="Username" required>
+
+            <input type="password" class="form-control mb-4" name="password" placeholder="Password" required>
+
+            <button name="login" class="btn btn-primary w-100 login-btn">Login</button>
+
+        </form>
     </div>
-    <script>
-        var KTAppSettings = {
-            "breakpoints": {
-                "sm": 576,
-                "md": 768,
-                "lg": 992,
-                "xl": 1200,
-                "xxl": 1400
-            },
-            "colors": {
-                "theme": {
-                    "base": {
-                        "white": "#ffffff",
-                        "primary": "#3699FF",
-                        "secondary": "#E5EAEE",
-                        "success": "#1BC5BD",
-                        "info": "#8950FC",
-                        "warning": "#FFA800",
-                        "danger": "#F64E60",
-                        "light": "#E4E6EF",
-                        "dark": "#181C32"
-                    },
-                    "light": {
-                        "white": "#ffffff",
-                        "primary": "#E1F0FF",
-                        "secondary": "#EBEDF3",
-                        "success": "#C9F7F5",
-                        "info": "#EEE5FF",
-                        "warning": "#FFF4DE",
-                        "danger": "#FFE2E5",
-                        "light": "#F3F6F9",
-                        "dark": "#D6D6E0"
-                    },
-                    "inverse": {
-                        "white": "#ffffff",
-                        "primary": "#ffffff",
-                        "secondary": "#3F4254",
-                        "success": "#ffffff",
-                        "info": "#ffffff",
-                        "warning": "#ffffff",
-                        "danger": "#ffffff",
-                        "light": "#464E5F",
-                        "dark": "#ffffff"
+    <script src="<?= BASE_URL ?>assets/plugins/global/plugins.bundle.js"></script>
+    <script src="<?= BASE_URL ?>assets/plugins/custom/prismjs/prismjs.bundle.js"></script>
+    <script src="<?= BASE_URL ?>assets/js/scripts.bundle.js"></script>
+    <script src="<?= BASE_URL ?>assets/js/pages/features/miscellaneous/sweetalert2.js"></script>
+
+    <?php
+    if (isset($_SESSION['username'], $_SESSION['rule'])):
+
+        // OPERATOR → LINE
+        if ($_SESSION['rule'] === 'operator'):
+    ?>
+
+            <script>
+                Swal.fire({
+                    title: 'Login Line',
+                    html: '<input id="line_user" class="swal2-input" placeholder="Line Username">' +
+                        '<input id="line_pass" type="password" class="swal2-input" placeholder="Password">',
+                    confirmButtonText: 'Login',
+                    showCancelButton: true,
+                    cancelButtonText: 'Batal',
+                    allowOutsideClick: false,
+                    focusConfirm: false,
+                    preConfirm: () => {
+
+                        const username = document.getElementById('line_user').value.trim();
+                        const password = document.getElementById('line_pass').value.trim();
+
+                        if (!username || !password) {
+                            Swal.showValidationMessage('Username dan password wajib diisi');
+                            return false;
+                        }
+
+                        return fetch('controllers/validate_line.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    username,
+                                    password
+                                })
+                            })
+                            .then(r => r.json())
+                            .then(d => {
+                                if (!d.success) {
+                                    Swal.showValidationMessage(d.message);
+                                    return false;
+                                }
+                                return true;
+                            })
+                            .catch(() => {
+                                Swal.showValidationMessage('Server error');
+                                return false;
+                            });
+
                     }
-                },
-                "gray": {
-                    "gray-100": "#F3F6F9",
-                    "gray-200": "#EBEDF3",
-                    "gray-300": "#E4E6EF",
-                    "gray-400": "#D1D3E0",
-                    "gray-500": "#B5B5C3",
-                    "gray-600": "#7E8299",
-                    "gray-700": "#5E6278",
-                    "gray-800": "#3F4254",
-                    "gray-900": "#181C32"
-                }
-            },
-            "font-family": "Poppins"
-        };
-    </script>
-    <script src="assets/plugins/global/plugins.bundle.js"></script>
-    <script src="assets/js/scripts.bundle.js"></script>
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location = 'pages/operator/';
+                    } else {
+                        window.location = 'logout.php';
+                    }
+                });
+            </script>
+
+        <?php
+        // LINE → OPERATOR
+        elseif ($_SESSION['rule'] === 'line'):
+        ?>
+
+            <script>
+                Swal.fire({
+                    title: 'Login Operator',
+                    html: '<input id="op_user" class="swal2-input" placeholder="Operator Username">' +
+                        '<input id="op_pass" type="password" class="swal2-input" placeholder="Password">',
+                    confirmButtonText: 'Login',
+                    showCancelButton: true,
+                    cancelButtonText: 'Batal',
+                    allowOutsideClick: false,
+                    focusConfirm: false,
+                    preConfirm: () => {
+
+                        const username = document.getElementById('op_user').value.trim();
+                        const password = document.getElementById('op_pass').value.trim();
+
+                        if (!username || !password) {
+                            Swal.showValidationMessage('Username dan password wajib diisi');
+                            return false;
+                        }
+
+                        return fetch('controllers/validate_operator.php', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({
+                                    username,
+                                    password
+                                })
+                            })
+                            .then(r => r.json())
+                            .then(d => {
+                                if (!d.success) {
+                                    Swal.showValidationMessage(d.message);
+                                    return false;
+                                }
+                                return true;
+                            })
+                            .catch(() => {
+                                Swal.showValidationMessage('Server error');
+                                return false;
+                            });
+
+                    }
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        window.location = 'pages/operator/';
+                    } else {
+                        window.location = 'controllers/logout.php';
+                    }
+                });
+            </script>
+
+    <?php
+        // ADMIN
+        elseif ($_SESSION['rule'] === 'admin'):
+            echo "<script>location='pages/dashboard.php'</script>";
+        endif;
+
+    endif;
+    ?>
+
     <?php if (isset($_SESSION['alert'])): ?>
-        <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
         <script>
             Swal.fire({
                 icon: "<?= $_SESSION['alert']['icon'] ?>",
                 title: "<?= $_SESSION['alert']['title'] ?>",
                 text: "<?= $_SESSION['alert']['text'] ?>",
-                confirmButtonText: "<?= $_SESSION['alert']['button'] ?>",
                 heightAuto: false,
-                customClass: {
-                    confirmButton: "btn font-weight-bold btn-<?= $_SESSION['alert']['style'] ?>",
-                    icon: "m-auto"
-                }
+                position: 'center'
             });
         </script>
-        <?php unset($_SESSION['alert']); ?>
-    <?php endif; ?>
-
+    <?php unset($_SESSION['alert']);
+    endif; ?>
 </body>
 
 </html>

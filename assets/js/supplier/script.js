@@ -1,116 +1,114 @@
 $(document).ready(function () {
 
     // ================================
-    // HELPER VALIDATION FUNCTION (FINAL)
+    // VALIDATION SUPPLIER
     // ================================
-    function validateLineName(value) {
+    function validateSupplierName(value) {
         const val = value.trim();
 
-        // 1. wajib diisi
         if (!val) {
-            return 'Nama line tidak boleh kosong!';
+            return 'Nama supplier tidak boleh kosong!';
         }
 
-        // 2. hanya alfanumerik & kapital
-        if (!/^[A-Z0-9]+$/.test(val)) {
-            return 'Hanya boleh huruf KAPITAL (A-Z) dan angka (0-9)!';
-        }
-
-        // 3. tidak boleh semua nol (0 / 00 / 000)
-        if (/^0+$/.test(val)) {
-            return 'Nama line tidak boleh hanya berisi angka 0!';
-        }
-
-        // 4. tidak boleh BERAKHIR dengan nol semua (A000, LINE00)
-        //    harus ada huruf atau angka NON-ZERO di AKHIR
-        if (/0+$/.test(val) && !/[1-9A-Z]$/.test(val)) {
-            return 'Nama line tidak boleh diakhiri dengan nol saja!';
+        if (val.length < 3) {
+            return 'Nama supplier minimal 3 karakter!';
         }
 
         return null;
     }
 
     // ---------------------------------
-    // ADD LINE
+    // ADD SUPPLIER
     // ---------------------------------
-    $('#addLineBtn').on('click', function () {
+    $('#addSupplierBtn').on('click', function () {
+
         Swal.fire({
-            title: 'Tambahkan Data Line Baru',
+            title: 'Tambah Supplier Baru',
             input: 'text',
-            inputLabel: 'Nama Line',
-            inputPlaceholder: 'Contoh: LINE01, A001',
+            inputLabel: 'Nama Supplier',
+            inputPlaceholder: 'Contoh: PT. ABC',
             showCancelButton: true,
             confirmButtonText: 'Tambahkan',
             cancelButtonText: 'Batal',
-            inputAttributes: {
-                autocapitalize: 'characters'
-            },
             inputValidator: (value) => {
-                return validateLineName(value);
+                return validateSupplierName(value);
             }
+
         }).then((result) => {
+
             if (result.isConfirmed) {
-                const lineName = result.value.trim();
+
+                const supplierName = result.value.trim();
 
                 Swal.fire({
                     title: 'Menyimpan...',
-                    text: 'Mohon tunggu sebentar.',
                     allowOutsideClick: false,
                     didOpen: () => Swal.showLoading()
                 });
 
-                fetch(`${HOST_URL}controllers/line/create.php`, {
+                fetch(`${HOST_URL}controllers/supplier/create.php`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
-                    body: JSON.stringify({ line_name: lineName })
+                    body: JSON.stringify({
+                        name_supplier: supplierName
+                    })
                 })
                     .then(res => res.json())
                     .then(data => {
+
                         if (data.success) {
                             Swal.fire('Berhasil!', data.message, 'success')
                                 .then(() => location.reload());
                         } else {
                             Swal.fire('Gagal!', data.message, 'error');
                         }
+
                     })
                     .catch(err => {
                         console.error(err);
                         Swal.fire('Oops...', err.message, 'error');
                     });
             }
+
         });
     });
+    // ---------------------------------
+    // EDIT SUPPLIER
+    // ---------------------------------
+    $('#kt_datatable').on('click', '.editSupplierBtn', function () {
 
-    // ---------------------------------
-    // EDIT LINE
-    // ---------------------------------
-    $('#kt_datatable').on('click', '.editLineBtn', function () {
-        const lineId = $(this).data('id');
-        const currentLineName = $(this).data('name');
+        const supplierId = $(this).data('id');
+        const currentName = $(this).data('name');
 
         Swal.fire({
-            title: 'Edit Data Line',
+            title: 'Edit Supplier',
             input: 'text',
-            inputLabel: 'Nama Line',
-            inputValue: currentLineName,
-            inputPlaceholder: 'Contoh: LINE01, A001',
+            inputLabel: 'Nama Supplier',
+            inputValue: currentName,
+            inputPlaceholder: 'Contoh: PT. ABC',
             showCancelButton: true,
-            confirmButtonText: 'Simpan Perubahan',
+            confirmButtonText: 'Simpan',
             cancelButtonText: 'Batal',
-            inputAttributes: {
-                autocapitalize: 'characters'
-            },
             inputValidator: (value) => {
-                return validateLineName(value);
-            }
-        }).then((result) => {
-            if (result.isConfirmed) {
-                const newLineName = result.value.trim();
 
-                if (newLineName === currentLineName) {
+                const val = value.trim();
+
+                if (!val) return 'Nama supplier tidak boleh kosong!';
+                if (val.length < 3) return 'Nama supplier minimal 3 karakter!';
+
+                return null;
+            }
+
+        }).then((result) => {
+
+            if (result.isConfirmed) {
+
+                const newName = result.value.trim();
+
+                if (newName === currentName) {
                     Swal.fire('Tidak ada perubahan', '', 'info');
                     return;
                 }
@@ -121,31 +119,34 @@ $(document).ready(function () {
                     didOpen: () => Swal.showLoading()
                 });
 
-                fetch(`${HOST_URL}controllers/line/edit.php`, {
+                fetch(`${HOST_URL}controllers/supplier/edit.php`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'Accept': 'application/json'
                     },
                     body: JSON.stringify({
-                        line_id: lineId,
-                        line_name: newLineName
+                        id_supplier: supplierId,
+                        name_supplier: newName
                     })
                 })
                     .then(res => res.json())
                     .then(data => {
+
                         if (data.success) {
                             Swal.fire('Berhasil!', data.message, 'success')
                                 .then(() => location.reload());
                         } else {
                             Swal.fire('Gagal!', data.message, 'error');
                         }
+
                     })
                     .catch(err => {
                         console.error(err);
                         Swal.fire('Oops...', err.message, 'error');
                     });
             }
+
         });
     });
 

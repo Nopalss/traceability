@@ -4,30 +4,9 @@ require_once __DIR__ . '/../../includes/config.php';
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/clear_temp_session.php';
 $_SESSION['halaman'] = 'incoming part';
-$_SESSION['menu'] = 'incoming part';
+$_SESSION['table'] = 'all-part-income';
+$_SESSION['menu'] = 'incoming_part';
 
-
-$sql = "
-    SELECT 
-        d.ref_number,
-        d.part_code,
-        d.qty,
-        d.incoming_date,
-        d.status,
-        d.lot_no,
-        d.remarks,
-        p.part_name,
-        p.supplier
-    FROM tbl_detail_part d
-    JOIN tbl_part p 
-        ON p.part_code = d.part_code
-    ORDER BY d.incoming_date DESC
-    LIMIT 5
-";
-
-$stmt = $pdo->prepare($sql);
-$stmt->execute();
-$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
@@ -58,37 +37,8 @@ require __DIR__ . '/../../includes/navbar.php';
                             </div>
                         </div>
                         <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h3>5 Part Terakhir Masuk</h3>
-                                <a href="<?= BASE_URL ?>pages/incoming_part/all.php">Lihat Semua</a>
-                            </div>
-                            <div class="table-responsive">
 
-                                <table class="table">
-                                    <thead>
-                                        <tr>
-                                            <th>Ref. NO</th>
-                                            <th>Part Code</th>
-                                            <th>Quantity</th>
-                                            <th>Supplier</th>
-                                            <th>Incoming</th>
-                                            <th></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($rows as $r): ?>
-                                            <tr>
-                                                <td><?= $r['ref_number'] ?></td>
-                                                <td><?= $r['part_code'] ?></td>
-                                                <td><?= $r['qty'] ?></td>
-                                                <td><?= $r['supplier'] ?></td>
-                                                <td><?= $r['incoming_date'] ?></td>
-                                                <td><a href="<?= BASE_URL ?>pages/incoming_part/detail.php?ref_no=<?= $r['ref_number'] ?>">Detail</a></td>
-                                            </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <div class="datatable datatable-bordered datatable-head-custom" id="kt_datatable"></div>
                             <!--end: Datatable-->
                         </div>
                     </div>

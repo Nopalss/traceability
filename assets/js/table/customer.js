@@ -12,7 +12,7 @@ var KTDatatableLocalSortDemo = function () {
                 type: 'remote',
                 source: {
                     read: {
-                        url: HOST_URL + '/api/user-table.php',
+                        url: HOST_URL + '/api/customer/index.php',
                     },
                 },
                 pageSize: 10,
@@ -40,35 +40,36 @@ var KTDatatableLocalSortDemo = function () {
             },
 
             // columns definition
-            columns: [{
-                field: 'user_id',
-                title: '#',
-                width: 30,
-                type: 'number',
-                selector: false,
-                textAlign: 'center',
-            },
-            {
-                field: 'username',
-                title: 'Username',
-                textAlign: 'center',
-            }, {
-                field: 'rule',
-                textAlign: 'center',
-                title: 'Rule',
-                template: function (row) {
-                    return `<span class="text-capitalize">${row.rule}</span>`;
-                }
-            }, {
-                field: 'Actions',
-                title: 'Actions',
-                sortable: false,
-                width: 125,
-                overflow: 'visible',
-                autoHide: false,
-                template: function (row) {
-                    return `\
-                        <a href="${HOST_URL}pages/setting/user/update.php?id=${row.user_id}" class="btn btn-sm btn-warning btn-text-primary btn-icon mr-2" title="Edit details">\
+            columns: [
+                {
+                    field: 'id_supplier',
+                    title: '#',
+                    textAlign: 'center',
+                    width: 30,
+                    template: function (row, index, datatable) {
+                        return index + 1;
+                    },
+                },
+                {
+                    field: 'name_supplier',
+                    title: 'Name',
+                }, {
+                    field: 'created_at',
+                    title: 'Created At',
+                    format: 'MM/DD/YYYY',
+                }, {
+                    field: 'created_by',
+                    title: 'Created By ',
+                }, {
+                    field: 'Actions',
+                    title: 'Actions',
+                    sortable: false,
+                    width: 125,
+                    overflow: 'visible',
+                    autoHide: false,
+                    template: function (row) {
+                        return `\
+                        <a class="btn btn-sm btn-warning btn-text-primary btn-icon mr-2 editCustomerBtn" title="Edit details" data-id="${row.id_supplier}" data-name="${row.name_supplier}" >\
                             <span class="svg-icon svg-icon-md">\
                                 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">\
                                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">\
@@ -79,7 +80,7 @@ var KTDatatableLocalSortDemo = function () {
                                 </svg>\
                             </span>\
                         </a>\
-                        <a onclick="confirmDeleteTemplate('${row.user_id}', 'controllers/setting/user/delete.php')" class="btn btn-sm btn-danger btn-text-primary btn-icon" title="Delete">\
+                        <a onclick="confirmDeleteTemplate('${row.id_supplier}', 'controllers/customer/delete.php')" class="btn btn-sm btn-danger btn-text-primary btn-icon" title="Delete">\
                             <span class="svg-icon svg-icon-md">\
                                 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">\
                                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">\
@@ -91,8 +92,8 @@ var KTDatatableLocalSortDemo = function () {
                             </span>\
                         </a>\
                     `;
-                },
-            }],
+                    },
+                }],
         });
 
         $('#kt_datatable_search_status').on('change', function () {

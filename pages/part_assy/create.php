@@ -6,7 +6,11 @@ $_SESSION['halaman'] = 'part assy';
 $_SESSION['menu']    = 'part_assy';
 $_SESSION['subHalaman'] = ' | Add Part Assy';
 
-$sql = "SELECT id_part, part_code, part_name FROM tbl_part ORDER BY part_code ASC";
+$sql = "SELECT id_part, part_code, part_name FROM tbl_part  WHERE status_assy = 0 ORDER BY part_code ASC";
+$stmt = $pdo->prepare($sql);
+$stmt->execute();
+$parts_assy = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$sql = "SELECT id_part, part_code, part_name FROM tbl_part  ORDER BY part_code ASC";
 $stmt = $pdo->prepare($sql);
 $stmt->execute();
 $parts = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -31,7 +35,7 @@ require __DIR__ . '/../../includes/navbar.php';
                                 <label class="form-label font-weight-bolder">Part Assy</label>
                                 <select name="part_assy" class="form-control" required id="partAssySelect">
                                     <option value="">select</option>
-                                    <?php foreach ($parts as $p): ?>
+                                    <?php foreach ($parts_assy as $p): ?>
                                         <option value="<?= $p['part_code']; ?>">
                                             <?= htmlspecialchars($p['part_code']) ?> - <?= htmlspecialchars($p['part_name']); ?>
                                         </option>

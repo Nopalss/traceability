@@ -13,50 +13,54 @@ if ($raw === '') {
     exit;
 }
 
-// ===============================
-// HELPER PARSE
-// ===============================
-function ambil($str, $a, $b = null)
+/*
+=============================
+ FLEXIBLE QR PARSER Z1–Z7
+=============================
+*/
+function parseQR($raw)
 {
-    $p1 = strpos($str, $a);
-    if ($p1 === false) return null;
+    $result = [];
 
-    $p1 += strlen($a);
-    $p2 = $b ? strpos($str, $b, $p1) : strlen($str);
-    if ($p2 === false) $p2 = strlen($str);
+    $parts = explode('|', $raw);
 
-    return trim(substr($str, $p1, $p2 - $p1));
+    foreach ($parts as $p) {
+        $p = trim($p);
+        if (preg_match('/^(Z[1-7])(.*)$/', $p, $m)) {
+            $result[$m[1]] = trim($m[2]);
+        }
+    }
+
+    return $result;
 }
 
-// ===============================
-// PARSE QR
-// FORMAT:
-// Z1PARTCODEZ2LOTZ3QTYZ4REMARKSZ5REFNO
-// ===============================
+
+$z = parseQR($raw);
+
 $data = [
-    'part_code' => ambil($raw, 'Z1', 'Z2'),
-    'lot_no'    => ambil($raw, 'Z2', 'Z3'),
-    'qty'       => ambil($raw, 'Z3', 'Z4'),
-    'remarks'   => ambil($raw, 'Z4', 'Z5'),
-    'ref_no'    => ambil($raw, 'Z5')
+    'part_code' => $z['Z1'] ?? null,
+    'lot_no'    => $z['Z2'] ?? '',
+    'qty'       => isset($z['Z3']) ? intval($z['Z3']) : 1,
+    'remarks'   => $z['Z4'] ?? '',
+    'ref_no'    => $z['Z5'] ?? ('REF-' . time()),
 ];
 
-// validasi parsing
 if (!$data['part_code']) {
     echo json_encode([
         'success' => false,
-        'message' => 'Format QR tidak valid',
-        'data' => $data
+        'message' => 'Z1 (Part code) tidak ditemukan'
     ]);
     exit;
 }
 
-// ===============================
-// CEK PART DI DATABASE
-// ===============================
+/*
+=============================
+ VALIDATE PART
+=============================
+*/
 $stmt = $pdo->prepare("
-    SELECT part_name, supplier 
-    FROM tbl_part 
+    SELECT part_name
+    FROM tbl_part
     WHERE part_code = ?
 ");
 $stmt->execute([$data['part_code']]);
@@ -65,18 +69,51 @@ $part = $stmt->fetch(PDO::FETCH_ASSOC);
 if (!$part) {
     echo json_encode([
         'success' => false,
-        'message' => 'Part tidak ditemukan di database',
-        'data' => $data
+        'message' => 'Part tidak ditemukan di database'
     ]);
     exit;
 }
 
-// ===============================
-// RESPONSE (TIDAK SIMPAN DATA)
-// ===============================
-echo json_encode([
-    'success' => true,
-    'message' => 'QR valid, part ditemukan',
-    'data' => $data,
-    'part' => $part
-]);
+/*
+=============================
+ INSERT INCOMING
+=============================
+*/
+try {
+
+    $stmt = $pdo->prepare("
+        INSERT INTO tbl_detail_part
+        (ref_number, part_code, qty, remain, incoming_date, status, lot_no, remarks)
+        VALUES (?, ?, ?, ?, NOW(), 'IN', ?, ?)
+    ");
+
+    $stmt->execute([
+        $data['ref_no'],
+        $data['part_code'],
+        $data['qty'],
+        $data['qty'], // remain = qty
+        $data['lot_no'],
+        $data['remarks'] ?: 'NORMAL_INCOMING'
+    ]);
+
+    echo json_encode([
+        'success' => true,
+        'message' => 'Incoming berhasil disimpan',
+        'data'    => $data,   // ⬅️ PENTING
+        'part'    => $part
+    ]);
+} catch (PDOException $e) {
+
+    if ($e->errorInfo[1] == 1062) {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Data duplikat (ref_number sudah ada)'
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'message' => 'Gagal insert incoming',
+            'error'   => $e->getMessage()
+        ]);
+    }
+}

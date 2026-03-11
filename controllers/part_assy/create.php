@@ -80,6 +80,13 @@ try {
     if (empty($usedParts)) {
         throw new Exception('Tidak ada part komponen yang valid.');
     }
+    $stmt = $pdo->prepare("
+                UPDATE tbl_part
+                SET status_assy = 1
+                WHERE part_code = ?
+            ");
+
+    $stmt->execute([$partAssy]);
 
     $pdo->commit();
 

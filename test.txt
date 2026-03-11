@@ -1,0 +1,184 @@
+🟡 PHASE 1 — Pisahkan Material Scan vs Production (Core Fix)
+
+Ini phase paling penting.
+
+1.1 Tambah tabel operator material (log only)
+
+Buat:
+
+tbl_operator_material
+
+
+Tujuan:
+
+Log scan material per PC tanpa mengubah global stock.
+
+1.2 Ubah ajax scan_material
+
+Saat ini:
+
+tbl_active_material
+
+
+Digunakan sebagai runtime stock.
+
+Ganti jadi:
+
+Material scan:
+
+ONLY:
+
+INSERT tbl_operator_material
+
+
+TIDAK:
+
+update tbl_active_material
+
+replace stock
+
+Frontend tetap tampil BOM + qty dari localStorage.
+
+Server hanya jadi logger.
+
+Outcome:
+
+Material jadi:
+
+LOCAL operational
+GLOBAL historical
+
+Tidak lagi shared state.
+
+🟡 PHASE 2 — Planning Actual Harus Server Driven
+
+Sekarang:
+
+actual hanya angka UI.
+
+2.1 Saat scan_product
+
+Tambahkan:
+
+UPDATE tbl_detail_production_planning.actual += qty
+
+
+Dengan kondisi:
+
+assy
+
+shift
+
+line
+
+production_date
+
+jam aktif
+
+Ini bikin:
+
+Planning → authoritative.
+
+2.2 Tambah guard planning habis
+
+Sebelum insert output:
+
+cek:
+
+total planned - actual >= qty
+
+
+Kalau tidak:
+
+reject produksi.
+
+Outcome:
+
+Tidak bisa overproduce.
+
+🟡 PHASE 3 — Summary Per ASSY dari Server
+
+Sekarang summary dihitung JS.
+
+Ini bikin beda antar PC.
+
+3.1 Tambah ajax action:
+action=summary
+
+
+Return:
+
+plan / actual / remain per assy.
+
+3.2 JS:
+
+hapus:
+
+sumPlan frontend
+
+
+Ganti:
+
+ambil dari server.
+
+Outcome:
+
+Semua PC lihat angka sama.
+
+🟡 PHASE 4 — Lightweight Global Sync
+
+Sekarang polling berat.
+
+4.1 Output polling incremental
+
+Frontend simpan:
+
+last_output_id
+
+
+Backend:
+
+WHERE id > last_id
+
+
+Bukan reload full.
+
+4.2 Summary polling tiap 2s
+
+Payload kecil.
+
+Tidak perlu websocket dulu.
+
+Outcome:
+
+Near realtime
+beban server turun
+PC sinkron
+
+🟡 PHASE 5 — Traceability Completion
+
+Supaya admin bisa audit:
+
+5.1 tbl_operator_material → link ke production
+
+Tambahkan kolom:
+
+linked_serial_no nullable
+
+
+Saat product scan:
+
+update material log.
+
+Ini bikin trace:
+
+part scan → product
+
+🧩 PHASE SUMMARY
+Phase	Fokus
+0	safety + duplicate guard
+1	pisahkan material runtime
+2	planning authoritative
+3	summary server
+4	realtime sync
+5	traceability

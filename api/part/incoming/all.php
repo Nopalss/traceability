@@ -8,22 +8,9 @@ try {
 
 
     $sql = "
-    SELECT 
-        d.ref_number,
-        d.part_code,
-        d.qty,
-        d.incoming_date,
-        d.status,
-        d.lot_no,
-        d.remarks,
-        p.part_name,
-        p.supplier
-    FROM tbl_detail_part d
-    JOIN tbl_part p 
-        ON p.part_code = d.part_code
+    SELECT * FROM tbl_detail_part
     WHERE 1=1
-    ORDER BY d.incoming_date DESC
-
+    ORDER BY incoming_date DESC
 ";
     $params = [];
 

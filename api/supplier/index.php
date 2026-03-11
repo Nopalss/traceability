@@ -6,7 +6,7 @@ try {
     $role = $_POST['query']['role'] ?? '';
 
 
-    $sql = "SELECT * FROM tbl_supplier WHERE 1=1 ORDER BY id_supplier ASC";
+    $sql = "SELECT * FROM tbl_supplier WHERE 1=1 AND status = 'supplier' ORDER BY id_supplier ASC";
 
     $params = [];
 

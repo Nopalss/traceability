@@ -7,13 +7,13 @@ $username = $_SESSION['username'] ?? null;
 $rule = $_SESSION['rule'] ?? null;
 ?>
 
+</div>
 <div class="footer bg-white py-4 d-flex flex-lg-column " id="kt_footer">
     <div class=" container-fluid  d-flex flex-column flex-md-row align-items-center justify-content-end">
         <div class="text-dark order-2 order-md-1">
             <span class="text-muted font-weight-bold mr-2">&copy;<?= date('Y') ?> PT. Surya Technology Industri</span>
         </div>
     </div>
-</div>
 </div>
 </div>
 </div>
@@ -132,6 +132,9 @@ $rule = $_SESSION['rule'] ?? null;
 <?php endif; ?>
 <?php if ($menu == "supplier"): ?>
     <script src="<?= BASE_URL ?>assets/js/supplier/script.js"></script>
+<?php endif; ?>
+<?php if ($menu == "customer"): ?>
+    <script src="<?= BASE_URL ?>assets/js/customer/script.js"></script>
 <?php endif; ?>
 <?php if ($menu == "shift"): ?>
     <script src="<?= BASE_URL ?>assets/js/shift/script.js"></script>

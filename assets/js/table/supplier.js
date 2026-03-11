@@ -69,7 +69,7 @@ var KTDatatableLocalSortDemo = function () {
                     autoHide: false,
                     template: function (row) {
                         return `\
-                        <a class="btn btn-sm btn-warning btn-text-primary btn-icon mr-2 editLineBtn" title="Edit details" data-id="${row.line_id}" data-name="${row.line_name}" >\
+                        <a class="btn btn-sm btn-warning btn-text-primary btn-icon mr-2 editSupplierBtn" title="Edit details" data-id="${row.id_supplier}" data-name="${row.name_supplier}" >\
                             <span class="svg-icon svg-icon-md">\
                                 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">\
                                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">\
@@ -80,7 +80,7 @@ var KTDatatableLocalSortDemo = function () {
                                 </svg>\
                             </span>\
                         </a>\
-                        <a onclick="confirmDeleteTemplate('${row.line_id}', 'controllers/line/delete.php')" class="btn btn-sm btn-danger btn-text-primary btn-icon" title="Delete">\
+                        <a onclick="confirmDeleteTemplate('${row.id_supplier}', 'controllers/supplier/delete.php')" class="btn btn-sm btn-danger btn-text-primary btn-icon" title="Delete">\
                             <span class="svg-icon svg-icon-md">\
                                 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">\
                                     <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">\

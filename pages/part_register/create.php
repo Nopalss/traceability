@@ -4,7 +4,7 @@ $_SESSION['halaman'] = 'part register';
 $_SESSION['menu'] = 'part_register';
 $_SESSION['subHalaman'] = ' | new part';
 
-$sql = "SELECT * FROM tbl_supplier";
+$sql = "SELECT * FROM tbl_supplier WHERE status = 'supplier'";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute();

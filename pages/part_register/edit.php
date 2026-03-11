@@ -25,7 +25,7 @@ $stmt = $pdo->prepare(
 );
 $stmt->execute([':id_part' => $id_part]);
 $part = $stmt->fetch(PDO::FETCH_ASSOC);
-$sql = "SELECT * FROM tbl_supplier";
+$sql = "SELECT * FROM tbl_supplier WHERE status = 'supplier'";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute();
