@@ -7,75 +7,83 @@ require_once __DIR__ . '/../../helper/handlePdoError.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-    // ================================
-    // Ambil input
-    // ================================
-    $partAssy = isset($_POST['id']) ? sanitize($_POST['id']) : null;
+    /* ================================
+       AMBIL INPUT
+    ================================ */
+    $id       = isset($_POST['id']) ? sanitize($_POST['id']) : null;
     $username = $_SESSION['username'] ?? null;
     $password = trim($_POST['password'] ?? '');
 
-    // ================================
-    // Validasi dasar
-    // ================================
-    if (empty($partAssy) || empty($password) || empty($username)) {
-        setAlert(
-            'warning',
-            'Oops!',
-            'Data tidak lengkap.',
-            'warning',
-            'Coba Lagi'
-        );
+    /* ================================
+       VALIDASI
+    ================================ */
+    if (empty($id) || empty($password) || empty($username)) {
+        setAlert('warning', 'Oops!', 'Data tidak lengkap.', 'warning', 'Coba Lagi');
         return redirect('pages/part_assy/');
     }
 
-    // ================================
-    // Verifikasi password user
-    // ================================
+    /* ================================
+       CEK PASSWORD
+    ================================ */
     $user = checkLogin($pdo, $username, $password);
     if (!$user) {
-        setAlert(
-            'error',
-            'Oops!',
-            'Password salah.',
-            'danger',
-            'Coba Lagi'
-        );
+        setAlert('error', 'Oops!', 'Password salah.', 'danger', 'Coba Lagi');
         return redirect('pages/part_assy/');
     }
 
     try {
-        // ================================
-        // Cek Part Assy exist
-        // ================================
-        $stmt = $pdo->prepare(
-            "SELECT 1 FROM tbl_part_assy WHERE part_assy = :part_assy LIMIT 1"
-        );
-        $stmt->execute([
-            ':part_assy' => $partAssy
-        ]);
 
-        if (!$stmt->fetchColumn()) {
-            throw new Exception('Data Part Assy tidak ditemukan.');
+        /* ================================
+           GET DATA MODEL + ASSY
+        ================================ */
+        $stmt = $pdo->prepare("
+            SELECT part_code 
+            FROM tbl_model 
+            WHERE id = ?
+        ");
+        $stmt->execute([$id]);
+        $assy = $stmt->fetchColumn();
+
+        if (!$assy) {
+            throw new Exception('Data tidak ditemukan.');
         }
 
-        // ================================
-        // Transaksi delete (hapus seluruh BOM)
-        // ================================
         $pdo->beginTransaction();
 
-        $stmt = $pdo->prepare(
-            "DELETE FROM tbl_part_assy WHERE part_assy = :part_assy"
-        );
-        $stmt->execute([
-            ':part_assy' => $partAssy
-        ]);
+        /* ================================
+           1. DELETE BOM DETAIL
+        ================================ */
+        $stmt = $pdo->prepare("
+            DELETE FROM tbl_part_assy 
+            WHERE part_assy = ?
+        ");
+        $stmt->execute([$assy]);
+
+        /* ================================
+           2. DELETE MODEL
+        ================================ */
+        $stmt = $pdo->prepare("
+            DELETE FROM tbl_model 
+            WHERE id = ?
+        ");
+        $stmt->execute([$id]);
+
+        /* ================================
+           3. DELETE PART ASSY (tbl_part)
+        ================================ */
+        $stmt = $pdo->prepare("
+            DELETE FROM tbl_part 
+            WHERE part_code = ? 
+            AND status_assy = 1
+        ");
+        $stmt->execute([$assy]);
 
         $pdo->commit();
 
         setAlert(
             'success',
             'Berhasil!',
-            'Part Assy berhasil dihapus.',
+            'Data Part Assy berhasil dihapus.',
             'success',
             'Oke'
         );

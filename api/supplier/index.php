@@ -6,26 +6,18 @@ try {
     $role = $_POST['query']['role'] ?? '';
 
 
-    $sql = "SELECT * FROM tbl_supplier WHERE 1=1 AND status = 'supplier' ORDER BY id_supplier ASC";
+    $sql = "SELECT * FROM tbl_supplier WHERE 1=1 AND status = 'supplier' ";
 
     $params = [];
 
-    // if (!empty($search)) {
-    //     $sql .= " AND (
-    //                     u.username LIKE :search
-    //                     OR u.role LIKE :search
-    //                     OR COALESCE(t.name, a.name) LIKE :search
-    //                     OR COALESCE(t.phone, a.phone) LIKE :search
-    //                 )";
-    //     $params[':search'] = "%$search%";
-    // }
+    if (!empty($search)) {
+        $sql .= " AND (
+                        name_supplier LIKE :search
+                    )";
+        $params[':search'] = "%$search%";
+    }
 
-    // if (!empty($role)) {
-    //     $sql .= " AND u.role LIKE :role";
-    //     $params[':role'] = $role;
-    // }
-
-
+    $sql .=  "ORDER BY id_supplier ASC";
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
 

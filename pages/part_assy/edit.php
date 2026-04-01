@@ -1,219 +1,266 @@
 <?php
 require_once __DIR__ . '/../../includes/config.php';
 
-$partAssy = $_GET['part_assy'] ?? '';
-if ($partAssy === '') redirect('pages/part_assy/');
+$id = $_GET['id'] ?? 0;
 
-$parts = $pdo->query("
-    SELECT part_code, part_name 
-    FROM tbl_part 
-    ORDER BY part_code
-")->fetchAll(PDO::FETCH_ASSOC);
+/* =========================
+   GET MODEL
+========================= */
+$stmt = $pdo->prepare("SELECT m.*, p.part_name FROM tbl_model m JOIN tbl_part p ON m.part_code = p.part_code WHERE id = ? ");
+$stmt->execute([$id]);
+$model = $stmt->fetch(PDO::FETCH_ASSOC);
 
+if (!$model) {
+    die("Data tidak ditemukan");
+}
+
+$assyCode = $model['part_code'];
+
+/* =========================
+   GET BOM DETAIL
+========================= */
 $stmt = $pdo->prepare("
-    SELECT pa.part_code, pa.qty, p.part_name
-    FROM tbl_part_assy pa
-    JOIN tbl_part p ON pa.part_code = p.part_code
-    WHERE pa.part_assy = :part_assy
+SELECT 
+    pa.part_code,
+    pa.qty,
+    pa.unit,
+    p.part_name,
+    s.name_supplier
+FROM tbl_part_assy pa
+LEFT JOIN tbl_part p ON pa.part_code = p.part_code
+LEFT JOIN tbl_supplier s ON p.supplier = s.id_supplier
+WHERE pa.part_assy = ?
 ");
-$stmt->execute([':part_assy' => $partAssy]);
-$items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$stmt->execute([$assyCode]);
+$bom = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$_SESSION['halaman'] = 'part assy';
-$_SESSION['menu'] = 'part_assy';
-$_SESSION['subHalaman'] = ' | Edit Part Assy | ' . $partAssy;
+/* =========================
+   GET MASTER PART
+========================= */
+$stmt = $pdo->prepare("
+SELECT 
+    p.part_code, 
+    p.part_name,
+    s.name_supplier
+FROM tbl_part p
+LEFT JOIN tbl_supplier s ON p.supplier = s.id_supplier
+WHERE p.status_assy = 0
+ORDER BY p.part_code ASC
+");
+$stmt->execute();
+$parts = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
 ?>
 
-<div class="content d-flex flex-column flex-column-fluid pt-0">
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-9">
-                <div class="card">
-                    <div class="card-body">
+<div class="container mt-5">
+    <div class="card">
+        <div class="card-header">
+            <h3>Edit BOM</h3>
+        </div>
 
-                        <h3>Form Edit Part Assy</h3>
+        <div class="card-body">
 
-                        <form method="post" action="<?= BASE_URL ?>controllers/part_assy/edit.php">
+            <div class="row mb-4">
+                <div class="col-md-4">
+                    <label>Model</label>
+                    <input type="text" id="modelName" class="form-control" value="<?= $model['name'] ?>">
+                </div>
 
-                            <input type="hidden" name="part_assy" value="<?= htmlspecialchars($partAssy) ?>">
+                <div class="col-md-4">
+                    <label>Part Code</label>
+                    <input type="text" id="assyCode" class="form-control" value="<?= $model['part_code'] ?>" readonly>
+                </div>
 
-                            <div class="col input-group-sm mt-7">
-                                <label class="form-label small font-weight-bolder">Part Assy</label>
-                                <input type="text" class="form-control" value="<?= htmlspecialchars($partAssy) ?>" disabled>
-                            </div>
-
-                            <div class="d-flex mt-10 mb-3 justify-content-between align-items-center">
-                                <h3>Assembly Components</h3>
-                                <button type="button" id="btnAddRow" class="btn btn-primary">+ Tambah</button>
-                            </div>
-
-                            <table class="table table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>No</th>
-                                        <th>Part Code</th>
-                                        <th>Part Name</th>
-                                        <th>Quantity</th>
-                                        <th>Action</th>
-                                    </tr>
-                                </thead>
-
-                                <tbody id="assyTableBody">
-
-                                    <?php foreach ($items as $i => $row): ?>
-                                        <tr>
-                                            <td class="row-no"><?= $i + 1 ?></td>
-                                            <td>
-                                                <select name="items[<?= $i ?>][part_code]" class="form-control form-control-sm part-select" required>
-                                                    <option value="">select</option>
-                                                    <?php foreach ($parts as $p): ?>
-                                                        <option value="<?= $p['part_code'] ?>"
-                                                            data-name="<?= htmlspecialchars($p['part_name']) ?>"
-                                                            <?= $p['part_code'] === $row['part_code'] ? 'selected' : '' ?>>
-                                                            <?= $p['part_code'] ?> - <?= $p['part_name'] ?>
-                                                        </option>
-                                                    <?php endforeach ?>
-                                                </select>
-                                            </td>
-                                            <td class="part-name"><?= htmlspecialchars($row['part_name']) ?></td>
-                                            <td style="font-size:.85rem;width:3rem">
-                                                <input type="number"
-                                                    name="items[<?= $i ?>][qty]"
-                                                    class="form-control form-control-sm qty"
-                                                    min="1"
-                                                    value="<?= $row['qty'] ?>"
-                                                    onwheel="this.blur()"
-                                                    oninput="this.value=this.value<1?'':this.value"
-                                                    required>
-                                            </td>
-                                            <td>
-                                                <button type="button" class="btn btn-sm btn-danger btn-remove">
-                                                    <i class="flaticon-delete"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach ?>
-
-                                </tbody>
-                            </table>
-
-                            <div class="text-right mt-10">
-                                <a href="<?= BASE_URL ?>pages/part_assy/" class="btn btn-outline-danger">Batal</a>
-                                <button class="btn btn-success">Update</button>
-                            </div>
-
-                        </form>
-
-                    </div>
+                <div class="col-md-4">
+                    <label>Part Name</label>
+                    <input type="text" id="assyName" class="form-control" value="<?= $model['part_name'] ?>">
                 </div>
             </div>
+
+            <div class="d-flex justify-content-between mb-3">
+                <h4>Detail BOM</h4>
+                <button class="btn btn-primary btn-sm" id="btnAddRow">+ Tambah</button>
+            </div>
+
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Part Code</th>
+                        <th>Part Name</th>
+                        <th>Qty</th>
+                        <th>Unit</th>
+                        <th>Supplier</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody"></tbody>
+            </table>
+
+            <div class="text-right">
+                <button class="btn btn-success" id="btnSave">Update</button>
+            </div>
+
         </div>
     </div>
+</div>
 
-    <script>
-        const parts = <?= json_encode($parts) ?>;
-        const partAssy = "<?= $partAssy ?>";
+<?php require __DIR__ . '/../../includes/footer.php'; ?>
 
-        function renumber() {
-            document.querySelectorAll('.row-no').forEach((e, i) => e.innerText = i + 1);
-        }
+<script>
+    const parts = <?= json_encode($parts); ?>;
+    const bom = <?= json_encode($bom); ?>;
 
-        function getUsed() {
-            let arr = [];
-            document.querySelectorAll('.part-select').forEach(s => {
-                if (s.value) arr.push(s.value);
+    /* ======================
+       DUPLICATE CONTROL
+    ====================== */
+    function getSelectedParts() {
+        let arr = [];
+        document.querySelectorAll('.part-select').forEach(s => {
+            if (s.value) arr.push(s.value);
+        });
+        return arr;
+    }
+
+    function refreshPartOptions() {
+        const used = getSelectedParts();
+
+        document.querySelectorAll('.part-select').forEach(select => {
+            [...select.options].forEach(opt => {
+                if (!opt.value) return;
+
+                let disabled = used.includes(opt.value) && opt.value !== select.value;
+                opt.disabled = disabled;
+
+                opt.textContent = (disabled ? '❌ ' : '') + opt.value + ' - ' + opt.dataset.name;
+                opt.style.color = disabled ? '#dc3545' : '';
             });
-            return arr;
-        }
+        });
+    }
 
-        function refreshOptions() {
+    /* ======================
+       RENDER ROW
+    ====================== */
+    function renderRow(i, row = null) {
 
-            const used = getUsed();
+        let options = '<option value="">Select</option>';
+        parts.forEach(p => {
+            options += `<option value="${p.part_code}" 
+        ${row && p.part_code === row.part_code ? 'selected' : ''}
+        data-name="${p.part_name}"
+        data-supplier="${p.name_supplier || '-'}">
+        ${p.part_code} - ${p.part_name}</option>`;
+        });
 
-            document.querySelectorAll('.part-select').forEach(select => {
-
-                [...select.options].forEach(opt => {
-                    if (!opt.value) return;
-
-                    let disable = false;
-
-                    if (opt.value === partAssy) disable = true;
-                    if (used.includes(opt.value) && opt.value !== select.value) disable = true;
-
-                    opt.disabled = disable;
-
-                    if (disable) {
-                        opt.textContent = '❌ ' + opt.value + ' - ' + opt.dataset.name;
-                        opt.style.color = '#dc3545';
-                    } else {
-                        opt.textContent = opt.value + ' - ' + opt.dataset.name;
-                        opt.style.color = '';
-                    }
-
-                });
-
-            });
-        }
-
-        /* ADD ROW */
-        document.getElementById('btnAddRow').addEventListener('click', () => {
-
-            const tbody = document.getElementById('assyTableBody');
-            const idx = tbody.children.length;
-
-            let opts = '<option value="">select</option>';
-            parts.forEach(p => {
-                opts += `<option value="${p.part_code}" data-name="${p.part_name}">${p.part_code} - ${p.part_name}</option>`;
-            });
-
-            tbody.insertAdjacentHTML('beforeend', `
+        return `
 <tr>
-<td class="row-no"></td>
-<td><select name="items[${idx}][part_code]" class="form-control form-control-sm part-select" required>${opts}</select></td>
-<td class="part-name">-</td>
-<td style="font-size:.85rem;width:3rem">
-<input type="number" name="items[${idx}][qty]" class="form-control form-control-sm qty"
-min="1" onwheel="this.blur()" oninput="this.value=this.value<1?'':this.value" required>
-</td>
-<td><button type="button" class="btn btn-sm btn-danger btn-remove"><i class="flaticon-delete"></i></button></td>
-</tr>`);
+<td class="no"></td>
 
-            renumber();
-            refreshOptions();
+<td><select class="form-control part-select">${options}</select></td>
 
+<td class="name">${row?.part_name || '-'}</td>
+
+<td><input type="number" class="form-control qty" value="${row?.qty || ''}"></td>
+
+<td><input type="text" class="form-control unit" value="${row?.unit || 'Pcs'}"></td>
+
+<td class="supplier">${row?.name_supplier || '-'}</td>
+
+<td><button class="btn btn-danger btn-sm del">X</button></td>
+</tr>`;
+    }
+
+    /* ======================
+       INIT LOAD DATA
+    ====================== */
+    function loadData() {
+        $("#tableBody").html('');
+        bom.forEach((row, i) => {
+            $("#tableBody").append(renderRow(i, row));
+        });
+        renumber();
+        refreshPartOptions();
+    }
+
+    /* ======================
+       RENUMBER
+    ====================== */
+    function renumber() {
+        $("#tableBody tr").each(function(i) {
+            $(this).find(".no").text(i + 1);
+        });
+    }
+
+    /* ======================
+       EVENTS
+    ====================== */
+    $("#btnAddRow").click(function() {
+        $("#tableBody").append(renderRow());
+        renumber();
+        refreshPartOptions();
+    });
+
+    $(document).on("change", ".part-select", function() {
+        let selected = $(this).find(":selected");
+
+        let row = $(this).closest("tr");
+
+        row.find(".name").text(selected.data("name") || '-');
+        row.find(".supplier").text(selected.data("supplier") || '-');
+
+        refreshPartOptions();
+    });
+
+    $(document).on("click", ".del", function() {
+        $(this).closest("tr").remove();
+        renumber();
+        refreshPartOptions();
+    });
+
+    /* ======================
+       UPDATE SAVE
+    ====================== */
+    $("#btnSave").click(function() {
+
+        let data = [];
+
+        $("#tableBody tr").each(function() {
+
+            let part_code = $(this).find(".part-select").val();
+            let qty = $(this).find(".qty").val();
+            let unit = $(this).find(".unit").val();
+
+            if (!part_code || !qty) return;
+
+            data.push({
+                part_code,
+                qty,
+                unit
+            });
         });
 
-        /* REMOVE */
-        document.addEventListener('click', e => {
-            if (e.target.closest('.btn-remove')) {
-                e.target.closest('tr').remove();
-                renumber();
-                refreshOptions();
+        $.post("update_bom.php", {
+            id: <?= $id ?>,
+            model: $("#modelName").val(),
+            assy_code: $("#assyCode").val(),
+            assy_name: $("#assyName").val(),
+            items: JSON.stringify(data)
+        }, function(res) {
+
+            if (res.status === 'success') {
+                Swal.fire("Success", "Berhasil update!", "success")
+                    .then(() => location.reload());
+            } else {
+                Swal.fire("Error", res.msg, "error");
             }
-        });
 
-        /* CHANGE */
-        document.addEventListener('change', e => {
-            if (e.target.classList.contains('part-select')) {
-                const name = e.target.selectedOptions[0]?.dataset.name || '-';
-                e.target.closest('tr').querySelector('.part-name').innerText = name;
-                refreshOptions();
-            }
-        });
+        }, 'json');
 
-        /* DISABLE ARROW UP/DOWN */
-        document.addEventListener('keydown', function(e) {
-            if (e.target.type === 'number' && (e.which === 38 || e.which === 40)) {
-                e.preventDefault();
-            }
-        });
+    });
 
-        /* INIT */
-        refreshOptions();
-    </script>
-
-    <?php require __DIR__ . '/../../includes/footer.php'; ?>
+    /* INIT */
+    loadData();
+</script>

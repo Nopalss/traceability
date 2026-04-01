@@ -33,6 +33,7 @@ if ($supplier !== '') {
     $params[':supplier'] = $supplier;
 }
 
+$where[] = "p.status = 'sp'";
 // ================================
 // Hitung total data
 // ================================

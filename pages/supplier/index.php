@@ -4,54 +4,309 @@ $_SESSION['menu'] = 'supplier';
 $_SESSION['table'] = 'supplier';
 $_SESSION['halaman'] = 'supplier';
 $_SESSION['subHalaman'] = '';
+
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/clear_temp_session.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
 ?>
 
-<div class="content  d-flex flex-column flex-column-fluid" id="kt_content">
-    <!--begin::Entry-->
+<div class="content d-flex flex-column flex-column-fluid" id="kt_content">
     <div class="d-flex flex-column-fluid">
-        <!--begin::Container-->
-        <div class=" container ">
-            <!--begin::Card-->
+        <div class="container">
+
             <div class="card card-custom">
+
                 <div class="card-header flex-wrap border-0 pt-6 pb-0">
+
                     <div class="card-title">
                         <h3 class="card-label">
                             Data Supplier
                         </h3>
                     </div>
+
                     <div class="card-toolbar">
-                        <!--begin::Button-->
-                        <button class="btn btn-primary font-weight-bolder" id="addSupplierBtn">
-                            <span class="svg-icon svg-icon-md"><!--begin::Svg Icon | path:C:\wamp64\www\keenthemes\themes\metronic\theme\html\demo1\dist/../src/media/svg/icons\Code\Plus.svg--><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="24px" height="24px" viewBox="0 0 24 24" version="1.1">
-                                    <g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
-                                        <rect x="0" y="0" width="24" height="24" />
-                                        <circle fill="#000000" opacity="0.3" cx="12" cy="12" r="10" />
-                                        <path d="M11,11 L11,7 C11,6.44771525 11.4477153,6 12,6 C12.5522847,6 13,6.44771525 13,7 L13,11 L17,11 C17.5522847,11 18,11.4477153 18,12 C18,12.5522847 17.5522847,13 17,13 L13,13 L13,17 C13,17.5522847 12.5522847,18 12,18 C11.4477153,18 11,17.5522847 11,17 L11,13 L7,13 C6.44771525,13 6,12.5522847 6,12 C6,11.4477153 6.44771525,11 7,11 L11,11 Z" fill="#000000" />
-                                    </g>
-                                </svg><!--end::Svg Icon--></span>Add Supplier
+
+                        <button class="btn btn-light-success mr-5 font-weight-bolder" id="btnImportCSV">
+                            <i class="far fa-file-excel"></i> Import CSV
                         </button>
-                        <!--end::Button-->
+
+                        <button class="btn btn-primary font-weight-bolder" id="addSupplierBtn">
+                            Add Supplier
+                        </button>
+
                     </div>
                 </div>
+
                 <div class="card-body">
+                    <div class="mb-7">
+                        <div class="row align-items-center">
+                            <div class="col-lg-12 col-xl-12">
+                                <div class="row align-items-center">
+                                    <div class="col-md-4 my-2 my-md-0">
+                                        <div class="input-icon">
+                                            <input type="text" class="form-control" placeholder="Search..." id="kt_datatable_search_query" />
+                                            <span><i class="flaticon2-search-1 text-muted"></i></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div class="datatable datatable-bordered datatable-head-custom" id="kt_datatable"></div>
-                    <!--end: Datatable-->
                 </div>
+
             </div>
-            <!--end::Card-->
+
         </div>
-        <!-- end::Container -->
     </div>
 </div>
-<!-- end::entry -->
 
 
+<!-- ================= MODAL IMPORT ================= -->
+
+<div class="modal fade" id="importCSVModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title">Import Supplier CSV</h5>
+                <button class="close" data-dismiss="modal">&times;</button>
+            </div>
+
+            <div class="modal-body">
+
+                <div class="alert alert-light-info">
+                    Format CSV harus seperti ini:
+                    <br>
+                    <a href="<?= BASE_URL ?>pages/supplier/supplier.csv" download
+                        class="btn btn-light-primary btn-sm">
+
+                        <i class="fas fa-download mr-1"></i>
+                        Download Template
+
+                    </a>
+                </div>
+
+                <div class="form-group">
+                    <label>Select CSV File</label>
+                    <input type="file" id="csvFile" class="form-control" accept=".csv">
+                </div>
+
+                <div id="previewArea"></div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button class="btn btn-success" id="uploadSupplierBtn">
+                    Upload Supplier
+                </button>
+
+            </div>
+
+        </div>
+    </div>
+</div>
 
 
 <?php
 require __DIR__ . '/../../includes/footer.php';
 ?>
+
+<!-- PapaParse -->
+<script src="<?= BASE_URL ?>assets/js/papaparse.min.js"></script>
+
+<script>
+    let supplierData = [];
+
+    $("#btnImportCSV").click(function() {
+        $("#importCSVModal").modal("show");
+    });
+
+    /* =============================
+       NORMALIZE
+    ============================= */
+    function normalize(str) {
+        return (str || "")
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ");
+    }
+
+    /* =============================
+       READ CSV (FIXED)
+    ============================= */
+
+    $("#csvFile").change(function(e) {
+
+        let file = e.target.files[0];
+
+        if (!file) {
+            Swal.fire({
+                icon: 'error',
+                title: 'File tidak ditemukan'
+            });
+            return;
+        }
+
+        Papa.parse(file, {
+
+            header: true,
+            skipEmptyLines: true,
+
+            complete: function(results) {
+
+                let rows = results.data;
+                supplierData = [];
+
+                let html = `
+<table class="table table-bordered table-hover">
+<thead>
+<tr>
+<th width="60">No</th>
+<th>Supplier Name</th>
+</tr>
+</thead>
+<tbody>
+`;
+
+                let no = 1;
+
+                rows.forEach(function(row) {
+
+                    let name =
+                        row["Supplier"] ||
+                        row["supplier"] ||
+                        row["SUPPLIER"] ||
+                        Object.values(row)[0]; // fallback kalau tanpa header
+
+                    if (!name) return;
+
+                    name = name.trim();
+
+                    supplierData.push(name);
+
+                    html += `
+<tr>
+<td>${no}</td>
+<td>
+<input type="text" class="form-control supplier-input" value="${name}">
+</td>
+</tr>
+`;
+
+                    no++;
+
+                });
+
+                html += "</tbody></table>";
+
+                $("#previewArea").html(html);
+
+            }
+
+        });
+
+    });
+
+    /* =============================
+       UPLOAD
+    ============================= */
+
+    $("#uploadSupplierBtn").click(function() {
+
+        let suppliers = [];
+
+        $(".supplier-input").each(function() {
+
+            let name = $(this).val().trim();
+
+            if (name !== '') {
+                suppliers.push(name);
+            }
+
+        });
+
+        if (suppliers.length === 0) {
+
+            Swal.fire({
+                icon: 'warning',
+                title: 'Tidak ada data supplier'
+            });
+
+            return;
+
+        }
+
+        $.ajax({
+
+            url: "upload_csv_supplier.php",
+            type: "POST",
+            data: {
+                suppliers: suppliers
+            },
+
+            beforeSend: function() {
+
+                Swal.fire({
+                    title: 'Uploading...',
+                    text: 'Sedang memproses supplier',
+                    allowOutsideClick: false,
+                    didOpen: () => {
+                        Swal.showLoading()
+                    }
+                });
+
+            },
+
+            success: function(res) {
+
+                try {
+
+                    let data = typeof res === 'string' ? JSON.parse(res) : res;
+
+                    let message = `
+Supplier berhasil ditambahkan : ${data.inserted} |
+Supplier ditolak : ${data.rejected}
+`;
+
+                    if (data.duplicates.length > 0) {
+                        message += "\n\nSupplier sudah ada:\n" + data.duplicates.join("\n");
+                    }
+
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Import Supplier',
+                        text: message
+                    }).then(() => {
+                        location.reload();
+                    });
+
+                } catch (err) {
+
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Response Error',
+                        text: res
+                    });
+
+                }
+
+            },
+
+            error: function() {
+
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Server Error',
+                    text: 'Terjadi kesalahan saat upload'
+                });
+
+            }
+
+        });
+
+    });
+</script>

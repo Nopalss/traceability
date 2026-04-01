@@ -368,13 +368,12 @@ function jamLabel($jam)
                                     <th style="font-size: 0.885rem; padding-block: 3px">Operator</th>
                                     <th style="font-size: 0.885rem; padding-block: 3px; width:20px">QTY/SPQ</th>
                                     <th style="font-size: 0.885rem; padding-block: 3px">LOT/Serial</th>
-                                    <th style="font-size: 0.885rem; padding-block: 3px">Ref</th>
                                     <th style="font-size: 0.885rem; padding-block: 3px">Remark</th>
                                 </tr>
                             </thead>
                             <tbody id="outputBody">
                                 <tr>
-                                    <td colspan="9">Belum ada data</td>
+                                    <td colspan="8">Belum ada data</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -789,7 +788,7 @@ function jamLabel($jam)
 
             let rowCount = $('#outputBody tr').length;
             for (let i = rowCount; i < 4; i++) {
-                $('#outputBody').append('<tr><td colspan="9">&nbsp;</td></tr>');
+                $('#outputBody').append('<tr><td colspan="8">&nbsp;</td></tr>');
             }
         });
     }
@@ -1160,10 +1159,9 @@ function jamLabel($jam)
         }
 
         $.post('ajax_operator.php', {
+
             action: 'exit_meca',
             serial: barcode.Z2,
-            qty: barcode.Z3,
-            ref_product: barcode.Z5,
             parts: parts,
             line: lineId,
             shift: activeShift,
@@ -1221,7 +1219,7 @@ function jamLabel($jam)
                 rows += `
 <tr
 data-part="${p.part_code}"
-data-ref="${p.ref_number}"
+
 data-lot="${p.lot_no}"
 >
 
@@ -1309,7 +1307,7 @@ data-index="${i}">
                     $('.chkPart:checked').each(function() {
 
                         let row = $(this).closest('tr')
-                        let ref = row.data('ref')
+
                         let part = row.data('part')
                         let lot = row.data('lot')
 
@@ -1321,7 +1319,6 @@ data-index="${i}">
                             parts.push({
                                 part_code: part,
                                 lot_no: lot,
-                                ref_number: ref,
                                 ng_qty: qty
                             })
 
@@ -1386,8 +1383,6 @@ data-index="${i}">
 
             action: 'exit_meca',
             serial: barcode.Z2,
-            qty: barcode.Z3,
-            ref_product: barcode.Z5,
             parts: parts,
             line: lineId,
             shift: activeShift,
@@ -1555,8 +1550,7 @@ data-index="${i}">
 
         $.post('ajax_operator.php', {
             action: 'get_exit_material',
-            serial: barcode.Z2,
-            ref: barcode.Z5
+            serial: barcode.Z2
         }, function(res) {
 
             let r = JSON.parse(res)
@@ -1574,7 +1568,6 @@ data-index="${i}">
 <tr
 data-part="${p.part_code}"
 data-lot="${p.lot_no}"
-data-ref="${p.ref_number}"
 >
 
 <td>
@@ -1587,7 +1580,6 @@ checked>
 <td>${p.part_code}</td>
 <td>${p.part_name}</td>
 <td>${p.lot_no}</td>
-<td>${p.ref_number}</td>
 <td>${p.used_qty}</td>
 
 <td>
@@ -1601,7 +1593,9 @@ data-index="${i}">
 
 </tr>
 `
+
             })
+
 
             Swal.fire({
 
@@ -1618,7 +1612,10 @@ data-index="${i}">
                <select id="ngType"
 class="form-control form-control-sm">
 </select>
+
             </div>
+
+
             <table class="table table-sm table-bordered">
 
                 <thead style="background:#f1f3f5">
@@ -1633,7 +1630,6 @@ class="form-control form-control-sm">
                         <th>PART CODE</th>
                         <th>PART NAME</th>
                         <th>LOT</th>
-                        <th>REF</th>
                         <th>USED</th>
                         <th>NG QTY</th>
 
@@ -1663,7 +1659,6 @@ class="form-control form-control-sm">
 
                         let part = row.data('part')
                         let lot = row.data('lot')
-                        let ref = row.data('ref')
 
                         let i = $(this).data('index')
                         let qty = $(`.ngQty[data-index=${i}]`).val()
@@ -1673,7 +1668,6 @@ class="form-control form-control-sm">
                             parts.push({
                                 part_code: part,
                                 lot_no: lot,
-                                ref_number: ref,
                                 ng_qty: qty
                             })
 
@@ -1909,9 +1903,7 @@ class="form-control form-control-sm">
         $.post('ajax_operator.php', {
 
             action: 'in_meca',
-            serial: barcode.Z2,
-            ref: barcode.Z5,
-            qty: barcode.Z3,
+            serial: barcode.Z2
 
         }, function(res) {
 
@@ -1940,7 +1932,6 @@ class="form-control form-control-sm">
 
         let part = $(this).data('part')
         let lot = $(this).data('lot')
-        let ref = $(this).data('ref')
 
         Swal.fire({
 
@@ -1958,7 +1949,6 @@ class="form-control form-control-sm">
 
                 action: 'remove_active_material',
                 part: part,
-                ref: ref,
                 lot: lot,
                 line: lineId
 
@@ -1988,7 +1978,6 @@ class="form-control form-control-sm">
         let part = $(this).data('part')
         let lot = $(this).data('lot')
         let remain = $(this).data('remain')
-        let ref = $(this).data('ref')
 
         Swal.fire({
 
@@ -2037,7 +2026,6 @@ class="swal2-input">
                 action: 'adjust_material',
                 part: part,
                 lot: lot,
-                ref: ref,
                 type: d.type,
                 qty: d.qty,
                 line: lineId
@@ -2056,7 +2044,6 @@ class="swal2-input">
         let part = $(this).data('part')
         let lot = $(this).data('lot')
         let remain = $(this).data('remain')
-        let ref = $(this).data('ref')
 
         Swal.fire({
 
@@ -2104,7 +2091,6 @@ class="swal2-input">
 
                 action: 'material_ng',
                 part: part,
-                ref: ref,
                 lot: lot,
                 qty: d.qty,
                 reason: d.reason,

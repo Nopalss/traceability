@@ -12,10 +12,22 @@ try {
         throw new Exception('Invalid request');
     }
 
+    // =====================
+    // GET DATA
+    // =====================
     $shift_id = intval($data['shift_id'] ?? 0);
     $shift = strtoupper(trim($data['shift'] ?? ''));
+
+    // tetap jam
     $start = intval($data['start'] ?? -1);
     $end   = intval($data['end'] ?? -1);
+
+    // sekarang menit
+    $time_coffe    = isset($data['time_coffe']) ? intval($data['time_coffe']) : null;
+    $duration_time = isset($data['duration_time']) ? intval($data['duration_time']) : 0;
+
+    $break_makan   = isset($data['break_makan']) ? intval($data['break_makan']) : null;
+    $duration_bm   = isset($data['duration_bm']) ? intval($data['duration_bm']) : 0;
 
     // =====================
     // BASIC VALIDATION
@@ -29,7 +41,35 @@ try {
     }
 
     if ($start < 0 || $start > 23 || $end < 0 || $end > 23) {
-        throw new Exception('Jam tidak valid');
+        throw new Exception('Jam start/end tidak valid');
+    }
+
+    // convert shift ke menit
+    $start_minutes = $start * 60;
+    $end_minutes   = $end * 60;
+
+    // coffee harus di dalam shift
+    if ($time_coffe !== null && ($time_coffe < $start_minutes || $time_coffe > $end_minutes)) {
+        throw new Exception('Coffee break harus di dalam jam shift');
+    }
+
+    // =====================
+    // VALIDASI BREAK (MENIT)
+    // =====================
+    if ($time_coffe !== null && ($time_coffe < 0 || $time_coffe > 1439)) {
+        throw new Exception('Jam coffee break tidak valid');
+    }
+
+    if ($break_makan !== null && ($break_makan < 0 || $break_makan > 1439)) {
+        throw new Exception('Jam istirahat makan tidak valid');
+    }
+
+    if ($duration_time < 0) {
+        throw new Exception('Durasi coffee tidak boleh minus');
+    }
+
+    if ($duration_bm < 0) {
+        throw new Exception('Durasi makan tidak boleh minus');
     }
 
     // =====================
@@ -50,7 +90,6 @@ try {
         FROM tbl_shift 
         WHERE shift = ? AND shift_id != ?
     ");
-
     $check->execute([$shift, $shift_id]);
 
     if ($check->rowCount()) {
@@ -62,11 +101,27 @@ try {
     // =====================
     $stmt = $pdo->prepare("
         UPDATE tbl_shift
-        SET shift = ?, start = ?, end = ?
+        SET 
+            shift = ?, 
+            start = ?, 
+            end = ?, 
+            time_coffe = ?, 
+            duration_time = ?, 
+            break_makan = ?, 
+            duration_bm = ?
         WHERE shift_id = ?
     ");
 
-    $stmt->execute([$shift, $start, $end, $shift_id]);
+    $stmt->execute([
+        $shift,
+        $start,
+        $end,
+        $time_coffe,
+        $duration_time,
+        $break_makan,
+        $duration_bm,
+        $shift_id
+    ]);
 
     echo json_encode([
         'success' => true,

@@ -34,6 +34,11 @@ var KTDatatableLocalSortDemo = function () {
 
             columns: [
                 {
+                    field: 'model_name',
+                    title: 'Model',
+                    template: row => `<span style="font-size:0.875rem">${row.model_name}</span>`
+                },
+                {
                     field: 'part_code',
                     title: 'Part Code',
                     template: row => `<span style="font-size:0.875rem">${row.part_assy}</span>`
@@ -60,11 +65,11 @@ var KTDatatableLocalSortDemo = function () {
                                class="btn btn-sm btn-info btn-icon mr-2">
                                 <i class="flaticon-eye"></i>
                             </a>
-                            <a href="${HOST_URL}pages/part_assy/edit.php?part_assy=${row.part_assy}"
+                            <a href="${HOST_URL}pages/part_assy/edit.php?id=${row.id}"
                                class="btn btn-sm btn-warning btn-icon mr-2">
                                 <i class="flaticon-edit"></i>
                             </a>
-                            <a onclick="confirmDeleteTemplate('${row.part_assy}', 'controllers/part_assy/delete.php')"
+                            <a onclick="confirmDeleteTemplate('${row.id}', 'controllers/part_assy/delete.php')"
                                class="btn btn-sm btn-danger btn-icon">
                                 <i class="flaticon-delete"></i>
                             </a>

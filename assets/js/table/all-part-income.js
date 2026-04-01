@@ -87,6 +87,12 @@ var KTDatatableLocalSortDemo = function () {
                         return `<span style="font-size:0.875rem">${row.ref_number}</span>`;
                     }
                 }, {
+                    field: 'lot_no',
+                    title: 'Lot No',
+                    template: function (row) {
+                        return `<span style="font-size:0.875rem">${row.lot_no}</span>`;
+                    }
+                }, {
                     field: 'part_code',
                     title: 'Part',
                     template: function (row) {

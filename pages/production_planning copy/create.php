@@ -46,7 +46,12 @@ require __DIR__ . '/../../includes/navbar.php';
                 <form method="post" action="<?= BASE_URL ?>controllers/production_planning/create.php">
 
                     <label>Date</label>
-                    <input type="date" name="production_date" class="form-control" required min="<?= date('Y-m-d') ?>" onkeydown="return false">
+                    <input type="date"
+                        name="production_date"
+                        class="form-control"
+                        required
+                        min="<?= date('Y-m-d') ?>"
+                        onkeydown="return false">
 
                     <label class="mt-3">Line</label>
                     <select name="line_id" class="form-control" required>
@@ -56,18 +61,16 @@ require __DIR__ . '/../../includes/navbar.php';
                         <?php endforeach ?>
                     </select>
 
-                    <!-- 🔥 SHIFT CHECKLIST -->
-                    <label class="mt-3">Pilih Shift</label>
-                    <div id="shiftChecklist">
-                        <?php foreach ($shifts as $i => $s): ?>
-                            <div>
-                                <input type="checkbox" class="shift-check" value="<?= $i + 1 ?>">
-                                Shift <?= $s['shift'] ?>
-                            </div>
+                    <label class="mt-3">Jumlah Shift</label>
+                    <select id="shiftCount" class="form-control" required>
+                        <option value="">Select</option>
+                        <?php foreach ($shifts as $s): ?>
+                            <option value="<?= $s['shift'] ?>"><?= $s['shift'] ?></option>
                         <?php endforeach ?>
-                    </div>
+                    </select>
 
                     <hr>
+
                     <div id="shiftWrapper"></div>
 
                     <div class="text-right mt-7">
@@ -82,8 +85,7 @@ require __DIR__ . '/../../includes/navbar.php';
     </div>
 </div>
 
-<?php require __DIR__ . '/../../includes/footer.php'; ?>
-
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
 <script>
     let shifts = <?= json_encode($shifts) ?>;
@@ -100,18 +102,12 @@ require __DIR__ . '/../../includes/navbar.php';
         if (e.which === 38 || e.which === 40) e.preventDefault();
     });
 
-    // ======================
-    // ORIGINAL (TETAP)
-    // ======================
     $('#shiftCount').change(function() {
         $('#shiftWrapper').html('');
         let count = parseInt($(this).val());
         for (let s = 1; s <= count; s++) renderShift(s);
     });
 
-    // ======================
-    // RENDER SHIFT
-    // ======================
     function renderShift(shiftNo) {
 
         let shift = shifts[shiftNo - 1];
@@ -133,48 +129,16 @@ require __DIR__ . '/../../includes/navbar.php';
 
         $('#shiftWrapper').append(html);
         let card = $('#shiftWrapper .shift-card').last();
-
         card.data('hours', hours);
-        card.data('shiftData', shift);
-
         addProduct(card, shiftNo);
     }
 
-    // ======================
-    // CHECKLIST SHIFT
-    // ======================
-    $(document).on('change', '.shift-check', function() {
-        $('#shiftWrapper').html('');
-        $('.shift-check:checked').each(function() {
-            renderShift(parseInt($(this).val()));
-        });
+    $(document).on('click', '.addProduct', function() {
+        let card = $(this).closest('.shift-card');
+        let shiftNo = card.data('shift');
+        addProduct(card, shiftNo);
     });
 
-    // ======================
-    // HELPER
-    // ======================
-    function toggleRemove(card) {
-        let count = card.find('.product-card').length;
-        if (count <= 1) card.find('.remove-product').hide();
-        else card.find('.remove-product').show();
-    }
-
-    function getOverlap(start1, end1, start2, end2) {
-        let start = Math.max(start1, start2);
-        let end = Math.min(end1, end2);
-        return Math.max(0, end - start);
-    }
-
-    // ======================
-    // ❌ GENERATE LAMA (DIMATIKAN)
-    // ======================
-    $(document).on('click', '.generate', function() {
-        return;
-    });
-
-    // ======================
-    // ADD PRODUCT (UPDATED)
-    // ======================
     function addProduct(card, shiftNo) {
 
         let hours = card.data('hours');
@@ -182,21 +146,6 @@ require __DIR__ . '/../../includes/navbar.php';
 
         let html = `<div class="product-card">
 <button type="button" class="btn btn-sm btn-danger remove-product">×</button>
-
-<!-- 🔥 INPUT PER PRODUCT -->
-<div class="row mb-3">
-    <div class="col">
-        <label>Target</label>
-        <input type="number" class="form-control target-product" min="0">
-    </div>
-    <div class="col">
-        <label>Cycle Time (detik)</label>
-        <input type="number" class="form-control cycle-product" min="1">
-    </div>
-    <div class="col d-flex align-items-end">
-        <button type="button" class="btn btn-success generate-product">Generate</button>
-    </div>
-</div>
 
 <select name="product_code[${shiftNo}][]" class="form-control mb-3 product-select" required>
 <option value="">Select Product</option>
@@ -213,11 +162,15 @@ require __DIR__ . '/../../includes/navbar.php';
 <tr>
 <td>${h}:00 - ${n}:00</td>
 <td>
-<input type="number" min="0" class="form-control qty"
-name="qty[${shiftNo}][${idx}][]" value="0">
+<input type="number"
+       min="0"
+       step="1"
+       class="form-control qty"
+       name="qty[${shiftNo}][${idx}][]"
+       value="0">
 <input type="hidden"
-name="jam[${shiftNo}][${idx}][]"
-value="${h}:00-${n}:00">
+       name="jam[${shiftNo}][${idx}][]"
+       value="${h}:00-${n}:00">
 </td>
 </tr>`;
         });
@@ -226,125 +179,44 @@ value="${h}:00-${n}:00">
 <tr>
 <td><b>Overtime</b></td>
 <td>
-<input type="number" min="0" class="form-control qty"
-name="qty[${shiftNo}][${idx}][]" value="0">
+<input type="number"
+       min="0"
+       step="1"
+       class="form-control qty"
+       name="qty[${shiftNo}][${idx}][]"
+       value="0">
 <input type="hidden"
-name="jam[${shiftNo}][${idx}][]"
-value="OT">
+       name="jam[${shiftNo}][${idx}][]"
+       value="OT">
 </td>
 </tr>
-
+`;
+        html += `
 <tr><td><b>Total</b></td><td><b class="total">0</b></td></tr>
 </table>
 
 <div class="material-status mt-2"></div>
 </div>`;
-
         card.find('.products').append(html);
         toggleRemove(card);
     }
 
-    // ======================
-    // 🔥 GENERATE PER PRODUCT (FINAL)
-    // ======================
-    $(document).on('click', '.generate-product', function() {
-
-        let productCard = $(this).closest('.product-card');
-        let shiftCard = $(this).closest('.shift-card');
-
-        let target = parseInt(productCard.find('.target-product').val()) || 0;
-        let cycle = parseInt(productCard.find('.cycle-product').val()) || 1;
-
-        if (target <= 0 || cycle <= 0) return;
-
-        let hours = shiftCard.data('hours');
-        let shift = shiftCard.data('shiftData');
-
-        let capacities = [];
-        let totalCapacity = 0;
-
-        hours.forEach(h => {
-
-            let startHour = h * 60;
-            let endHour = (h + 1) * 60;
-
-            let minutes = 60;
-
-            if (shift.time_coffe && shift.duration_time) {
-                let s = shift.time_coffe;
-                let e = s + shift.duration_time;
-                minutes -= getOverlap(startHour, endHour, s, e);
-            }
-
-            if (shift.break_makan && shift.duration_bm) {
-                let s = shift.break_makan;
-                let e = s + shift.duration_bm;
-                minutes -= getOverlap(startHour, endHour, s, e);
-            }
-
-            if (minutes < 0) minutes = 0;
-
-            let cap = Math.floor((minutes * 60) / cycle);
-
-            capacities.push(cap);
-            totalCapacity += cap;
-        });
-
-        if (totalCapacity === 0) {
-            alert('Tidak ada kapasitas produksi');
-            return;
-        }
-
-        let distributed = [];
-        let overtime = 0;
-
-        if (target <= totalCapacity) {
-
-            distributed = capacities.map(c => Math.floor((c / totalCapacity) * target));
-
-            let sum = distributed.reduce((a, b) => a + b, 0);
-            let diff = target - sum;
-
-            for (let i = 0; i < diff; i++) {
-                distributed[i % distributed.length]++;
-            }
-
-        } else {
-            distributed = [...capacities];
-            overtime = target - totalCapacity;
-        }
-
-        let inputs = productCard.find('.qty');
-
-        inputs.each(function(i) {
-
-            if (i === inputs.length - 1) {
-                $(this).val(overtime);
-            } else {
-                $(this).val(distributed[i] || 0);
-            }
-
-        });
-
-        productCard.find('.qty').trigger('input');
-    });
-
-    // ======================
-    // ADD PRODUCT BUTTON
-    // ======================
-    $(document).on('click', '.addProduct', function() {
+    $(document).on('click', '.remove-product', function() {
         let card = $(this).closest('.shift-card');
-        let shiftNo = card.data('shift');
-        addProduct(card, shiftNo);
+        $(this).closest('.product-card').remove();
+        toggleRemove(card);
+        validateAll();
     });
-    // ======================
-    // 🔥 HITUNG TOTAL + VALIDATE
-    // ======================
+
+    function toggleRemove(card) {
+        let count = card.find('.product-card').length;
+        if (count <= 1) card.find('.remove-product').hide();
+        else card.find('.remove-product').show();
+    }
+
     $(document).on('input change', '.qty, .product-select', function() {
 
-        if ($(this).hasClass('qty') && $(this).val() < 0) {
-            $(this).val(0);
-        }
+        if ($(this).hasClass('qty') && $(this).val() < 0) $(this).val(0);
 
         let box = $(this).closest('.product-card');
         let sum = 0;
@@ -420,8 +292,11 @@ value="OT">
                 });
 
                 $('#submitBtn').prop('disabled', adaKekurangan);
+
             },
             'json'
         );
     }
 </script>
+
+<?php require __DIR__ . '/../../includes/footer.php'; ?>

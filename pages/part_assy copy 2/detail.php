@@ -10,7 +10,7 @@ if ($partAssy === '') {
 // Ambil BOM
 // ================================
 $stmt = $pdo->prepare("
-    SELECT pa.part_code, pa.qty, pa.unit, p.part_name, s.name_supplier
+    SELECT pa.part_code, pa.qty, p.part_name, s.name_supplier
     FROM tbl_part_assy pa
     JOIN tbl_part p ON pa.part_code = p.part_code
     JOIN tbl_supplier s ON p.supplier = s.id_supplier
@@ -32,17 +32,6 @@ $stmt = $pdo->prepare("
 $stmt->execute([':part_code' => $partAssy]);
 $part = $stmt->fetch(PDO::FETCH_ASSOC);
 
-$getModel = $pdo->prepare("
-    SELECT id, name 
-    FROM tbl_model 
-    WHERE part_code = :part
-");
-
-$getModel->execute([
-    'part' => $partAssy,
-]);
-
-$model = $getModel->fetch(PDO::FETCH_ASSOC);
 $_SESSION['halaman'] = 'part assy';
 $_SESSION['menu'] = 'part_assy';
 $_SESSION['subHalaman'] = '| Detail Part Assy';
@@ -62,10 +51,6 @@ require __DIR__ . '/../../includes/navbar.php';
 
                 <div class="row">
                     <div class="col-md-4">
-                        <div class="text-muted">Model</div>
-                        <div class="font-weight-bolder"><?= htmlspecialchars($model['name']) ?></div>
-                    </div>
-                    <div class="col-md-4">
                         <div class="text-muted">Part Code</div>
                         <div class="font-weight-bolder"><?= htmlspecialchars($part['part_code']) ?></div>
                     </div>
@@ -75,7 +60,10 @@ require __DIR__ . '/../../includes/navbar.php';
                         <div class="font-weight-bolder"><?= htmlspecialchars($part['part_name']) ?></div>
                     </div>
 
-
+                    <div class="col-md-4">
+                        <div class="text-muted">Supplier</div>
+                        <div class="font-weight-bolder"><?= htmlspecialchars($part['name_supplier']) ?></div>
+                    </div>
                 </div>
 
                 <hr>
@@ -89,7 +77,7 @@ require __DIR__ . '/../../includes/navbar.php';
                     </div>
 
                     <div class="col-md-8 d-flex align-items-end justify-content-end">
-                        <a href="<?= BASE_URL ?>pages/part_assy/edit.php?id=<?= urlencode($model['id']) ?>"
+                        <a href="<?= BASE_URL ?>pages/part_assy/edit.php?part_assy=<?= urlencode($partAssy) ?>"
                             class="btn btn-warning mr-2">
                             <i class="flaticon-edit"></i> Edit BOM
                         </a>
@@ -116,7 +104,6 @@ require __DIR__ . '/../../includes/navbar.php';
                                 <th>Part Code</th>
                                 <th>Part Name</th>
                                 <th class="text-center" width="80">Qty</th>
-                                <th class="text-center" width="80">Unit</th>
                                 <th>Supplier</th>
                             </tr>
                         </thead>
@@ -129,7 +116,6 @@ require __DIR__ . '/../../includes/navbar.php';
                                         <td class="font-weight-bolder"><?= $row['part_code'] ?></td>
                                         <td><?= $row['part_name'] ?></td>
                                         <td class="text-center"><?= $row['qty'] ?></td>
-                                        <td class="text-center"><?= $row['unit'] ?></td>
                                         <td><?= $row['name_supplier'] ?></td>
                                     </tr>
                                 <?php endforeach; ?>

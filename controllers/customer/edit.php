@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // Ambil input
-        $id_supplier   = intval($data['id_supplier'] ?? 0);
+        $id_supplier   = intval($data['id_Customer'] ?? 0);
         $name_customer = trim(sanitize($data['name_Customer'] ?? ''));
 
         if ($id_supplier <= 0 || $name_customer === '') {
