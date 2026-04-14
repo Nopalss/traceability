@@ -14,11 +14,12 @@ if ($ppCode == '') {
 |--------------------------------------------------------------------------
 */
 $stmt = $pdo->prepare("
-    SELECT pp.*, l.line_name
-    FROM tbl_production_planning pp
-    JOIN tbl_line l ON l.line_id = pp.line_id
-    WHERE pp.pp_code=?
-    ORDER BY pp.shift ASC
+    SELECT pp.*, l.line_name, s.shift AS shift_name
+FROM tbl_production_planning pp
+JOIN tbl_line l ON l.line_id = pp.line_id
+JOIN tbl_shift s ON s.shift_id = pp.shift
+WHERE pp.pp_code=?
+ORDER BY pp.shift ASC
 ");
 $stmt->execute([$ppCode]);
 $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -41,10 +42,10 @@ $data = [];
 foreach ($plans as $p) {
 
     $d = $pdo->prepare("
-        SELECT dp.*
+        SELECT dp.*, s.shift AS shift_name
         FROM tbl_detail_production_planning dp
         JOIN tbl_production_planning pp ON pp.pp_id = dp.pp_id
-        JOIN tbl_shift s ON s.shift = pp.shift
+        JOIN tbl_shift s ON s.shift_id = pp.shift
         WHERE dp.pp_id=?
         ORDER BY
             CASE
@@ -58,6 +59,7 @@ foreach ($plans as $p) {
     $d->execute([$p['pp_id']]);
 
     $data[$p['shift']][] = [
+        'shift_name' => $p['shift_name'],
         'product' => $p['product_code'],
         'qty'     => $p['qty'],
         'detail'  => $d->fetchAll(PDO::FETCH_ASSOC)
@@ -112,7 +114,7 @@ require __DIR__ . '/../../includes/navbar.php';
                     <div class="card card-shift p-5 mb-7">
 
                         <h5 class="mb-4">
-                            <span class="badge-shift">Shift <?= $shiftNo ?></span>
+                            <span class="badge-shift">Shift <?= $products[0]['shift_name'] ?></span>
                         </h5>
 
                         <?php
@@ -160,7 +162,7 @@ require __DIR__ . '/../../includes/navbar.php';
                         <hr>
 
                         <div class="text-right">
-                            <b>Total Shift <?= $shiftNo ?> : <?= $shiftTotal ?></b>
+                            <b>Total Shift <?= $products[0]['shift_name'] ?> : <?= $shiftTotal ?></b>
                         </div>
 
                     </div>

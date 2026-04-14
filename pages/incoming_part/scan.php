@@ -3,6 +3,11 @@ require_once __DIR__ . '/../../includes/config.php';
 $_SESSION['halaman'] = 'scan incoming part';
 $_SESSION['menu'] = 'incoming_part';
 
+$sql = "SELECT id_supplier, name_supplier FROM tbl_supplier WHERE status = 'supplier'";
+
+$stmt = $pdo->prepare($sql);
+$stmt->execute();
+$supplier = $stmt->fetchAll(PDO::FETCH_ASSOC);
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
@@ -25,14 +30,25 @@ require __DIR__ . '/../../includes/navbar.php';
                     <div class="col-lg-5 mb-5">
                         <div class="card">
                             <div class="card-body d-flex flex-column">
+                                <div class="input-group-sm mb-5">
+                                    <label class="form-label  font-weight-bolder">
+                                        Supplier
+                                    </label>
+                                    <select name="supplier" id="supplier" class="form-control">
+                                        <option value="">Pilih Supplier</option>
+                                        <?php foreach ($supplier as $s): ?>
+                                            <option value="<?= $s["id_supplier"] ?>"><?= $s["name_supplier"] ?></option>
+                                        <?php endforeach ?>
+                                    </select>
+                                </div>
+
                                 <h4>Masukkan QR Code</h4>
 
                                 <textarea
                                     id="qr_raw"
                                     class="mt-3 w-100 form-control"
                                     placeholder="Paste / scan QR di sini"
-                                    rows="5"
-                                    autofocus></textarea>
+                                    rows="5"></textarea>
 
                                 <button
                                     id="btn-execute"
@@ -118,6 +134,6 @@ require __DIR__ . '/../../includes/navbar.php';
 </div>
 
 <!-- JS -->
-<script src="<?= BASE_URL ?>assets/js/scan/incoming-part.js"></script>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
+<script src="<?= BASE_URL ?>assets/js/scan/incoming.js"></script>

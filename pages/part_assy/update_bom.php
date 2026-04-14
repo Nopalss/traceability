@@ -32,7 +32,7 @@ try {
     }
 
     /* =========================
-       2. CEK DUPLICATE ASSY (kalau berubah)
+       2. CEK DUPLICATE ASSY
     ========================== */
     if ($oldAssy !== $newAssy) {
 
@@ -67,7 +67,7 @@ try {
     $stmt->execute([$newAssy, $assyName, $oldAssy]);
 
     /* =========================
-       5. UPDATE RELASI BOM (IMPORTANT!)
+       5. UPDATE RELASI BOM
     ========================== */
     $stmt = $pdo->prepare("
         UPDATE tbl_part_assy 
@@ -77,20 +77,38 @@ try {
     $stmt->execute([$newAssy, $oldAssy]);
 
     /* =========================
-       6. DELETE OLD BOM DETAIL
+       6. DELETE OLD BOM
     ========================== */
     $pdo->prepare("
         DELETE FROM tbl_part_assy WHERE part_assy = ?
     ")->execute([$newAssy]);
 
     /* =========================
-       7. INSERT NEW BOM
+       PREPARE QUERY
     ========================== */
-    $insert = $pdo->prepare("
-        INSERT INTO tbl_part_assy (part_assy, part_code, qty, unit)
-        VALUES (?, ?, ?, ?)
+    $getSupplier = $pdo->prepare("
+        SELECT id_supplier 
+        FROM tbl_supplier 
+        WHERE name_supplier = :name 
+        AND status = 'supplier'
     ");
 
+    $getPart = $pdo->prepare("
+        SELECT id_part 
+        FROM tbl_part 
+        WHERE part_code = :code 
+        AND supplier = :supplier
+    ");
+
+    $insert = $pdo->prepare("
+        INSERT INTO tbl_part_assy 
+        (part_assy, part_code, qty, unit, remark, part_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+
+    /* =========================
+       7. INSERT NEW BOM
+    ========================== */
     $used = [];
 
     foreach ($items as $i) {
@@ -98,26 +116,67 @@ try {
         $part_code = trim($i['part_code'] ?? '');
         $qty       = (int)($i['qty'] ?? 0);
         $unit      = trim($i['unit'] ?? 'Pcs');
+        $remark    = (int)($i['remark'] ?? 0);
+        $supplier_name = trim($i['supplier'] ?? '');
 
         if (!$part_code) {
             throw new Exception("Ada part kosong");
         }
 
-        if (in_array($part_code, $used)) {
-            throw new Exception("Duplicate part di BOM: $part_code");
+        if (!$supplier_name) {
+            throw new Exception("Supplier kosong di part: $part_code");
         }
 
         if ($qty <= 0) {
             throw new Exception("Qty tidak valid di part: $part_code");
         }
 
-        $used[] = $part_code;
+        // 🔥 DUPLICATE CHECK (part + supplier)
+        $key = $part_code . '__' . $supplier_name;
 
+        if (in_array($key, $used)) {
+            throw new Exception("Duplicate part: $key");
+        }
+
+        $used[] = $key;
+
+        /* =========================
+           GET SUPPLIER ID
+        ========================== */
+        $getSupplier->execute([
+            'name' => $supplier_name
+        ]);
+
+        $supplier_id = $getSupplier->fetchColumn();
+
+        if (!$supplier_id) {
+            throw new Exception("Supplier tidak ditemukan: $supplier_name");
+        }
+
+        /* =========================
+           GET PART ID
+        ========================== */
+        $getPart->execute([
+            'code' => $part_code,
+            'supplier' => $supplier_id
+        ]);
+
+        $part_id = $getPart->fetchColumn();
+
+        if (!$part_id) {
+            throw new Exception("Part tidak ditemukan: $part_code - $supplier_name");
+        }
+
+        /* =========================
+           INSERT
+        ========================== */
         $insert->execute([
             $newAssy,
             $part_code,
             $qty,
-            $unit
+            $unit,
+            $remark,
+            $part_id
         ]);
     }
 

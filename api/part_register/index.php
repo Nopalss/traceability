@@ -14,7 +14,7 @@ $supplier = isset($query['supplier']) ? trim($query['supplier']) : '';
 
 // Pagination (default)
 $page  = isset($pagination['page']) ? (int)$pagination['page'] : 1;
-$limit = isset($pagination['perpage']) ? (int)$pagination['perpage'] : 10;
+$limit = isset($pagination['perpage']) ? (int)$pagination['perpage'] : 100;
 $offset = ($page - 1) * $limit;
 
 // ================================

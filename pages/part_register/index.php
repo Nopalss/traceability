@@ -8,7 +8,6 @@ $_SESSION['table'] = 'part_register';
 $_SESSION['menu'] = 'part_register';
 $_SESSION['subHalaman'] = '';
 
-
 $sql = "SELECT * FROM tbl_supplier WHERE status = 'supplier'";
 
 $stmt = $pdo->prepare($sql);

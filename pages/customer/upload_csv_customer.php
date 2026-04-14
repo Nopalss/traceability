@@ -14,23 +14,15 @@ if (!isset($_POST['customers'])) {
 }
 
 $customers = $_POST['customers'];
-
 $created_by = $_SESSION['username'] ?? 'system';
 
 /* =============================
-   NORMALIZE FUNCTION
+   NORMALIZE (STRONG - SAMA DENGAN SUPPLIER)
 ============================= */
 function normalize($str)
 {
-    $str = trim($str);
-    $str = strtolower($str);
-
-    // rapihin spasi
-    $str = preg_replace('/\s+/', ' ', $str);
-
-    // hapus titik & koma
-    $str = str_replace(['.', ','], '', $str);
-
+    $str = strtolower(trim($str));
+    $str = preg_replace('/[^a-z0-9]/', '', $str);
     return $str;
 }
 
@@ -44,7 +36,7 @@ $insertStmt = $pdo->prepare("
 ");
 
 /* =============================
-   LOAD CUSTOMER DARI DB (1x)
+   LOAD DB (1x)
 ============================= */
 $dbCustomers = $pdo->query("
     SELECT name_supplier 
@@ -52,10 +44,11 @@ $dbCustomers = $pdo->query("
     WHERE status='customer'
 ")->fetchAll(PDO::FETCH_COLUMN);
 
-/* normalize DB */
-$dbNormalized = array_map(function ($c) {
-    return normalize($c);
-}, $dbCustomers);
+/* normalize + jadikan hash */
+$dbNormalized = [];
+foreach ($dbCustomers as $c) {
+    $dbNormalized[normalize($c)] = true;
+}
 
 /* =============================
    COUNTER
@@ -64,7 +57,8 @@ $inserted = 0;
 $rejected = 0;
 $duplicates = [];
 
-$processed = []; // untuk detect duplicate di CSV
+/* hash untuk CSV duplicate */
+$processed = [];
 
 /* =============================
    LOOP
@@ -75,13 +69,19 @@ foreach ($customers as $name) {
 
     if ($name_original === '') continue;
 
+    // VALIDASI: minimal harus ada huruf
+    if (!preg_match('/[a-zA-Z]/', $name_original)) {
+        $rejected++;
+        $duplicates[] = $name_original;
+        continue;
+    }
+
     $name_normalized = normalize($name_original);
 
     /* =============================
        DUPLICATE CSV
     ============================= */
-    if (in_array($name_normalized, $processed)) {
-
+    if (isset($processed[$name_normalized])) {
         $rejected++;
         $duplicates[] = $name_original;
         continue;
@@ -90,8 +90,7 @@ foreach ($customers as $name) {
     /* =============================
        DUPLICATE DB
     ============================= */
-    if (in_array($name_normalized, $dbNormalized)) {
-
+    if (isset($dbNormalized[$name_normalized])) {
         $rejected++;
         $duplicates[] = $name_original;
         continue;
@@ -108,8 +107,8 @@ foreach ($customers as $name) {
     $inserted++;
 
     // update cache
-    $processed[] = $name_normalized;
-    $dbNormalized[] = $name_normalized;
+    $processed[$name_normalized] = true;
+    $dbNormalized[$name_normalized] = true;
 }
 
 /* =============================

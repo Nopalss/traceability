@@ -6,7 +6,12 @@ $id = $_GET['id'] ?? 0;
 /* =========================
    GET MODEL
 ========================= */
-$stmt = $pdo->prepare("SELECT m.*, p.part_name FROM tbl_model m JOIN tbl_part p ON m.part_code = p.part_code WHERE id = ? ");
+$stmt = $pdo->prepare("
+SELECT m.*, p.part_name 
+FROM tbl_model m 
+JOIN tbl_part p ON m.part_code = p.part_code 
+WHERE id = ?
+");
 $stmt->execute([$id]);
 $model = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -17,17 +22,18 @@ if (!$model) {
 $assyCode = $model['part_code'];
 
 /* =========================
-   GET BOM DETAIL
+   GET BOM DETAIL (UPDATED)
 ========================= */
 $stmt = $pdo->prepare("
 SELECT 
     pa.part_code,
     pa.qty,
     pa.unit,
+    pa.remark,
     p.part_name,
     s.name_supplier
 FROM tbl_part_assy pa
-LEFT JOIN tbl_part p ON pa.part_code = p.part_code
+LEFT JOIN tbl_part p ON pa.part_id = p.id_part
 LEFT JOIN tbl_supplier s ON p.supplier = s.id_supplier
 WHERE pa.part_assy = ?
 ");
@@ -90,10 +96,11 @@ require __DIR__ . '/../../includes/navbar.php';
                     <tr>
                         <th>No</th>
                         <th>Part Code</th>
-                        <th>Part Name</th>
                         <th>Qty</th>
                         <th>Unit</th>
                         <th>Supplier</th>
+                        <th>Remark</th>
+                        <th>Status</th>
                         <th>Action</th>
                     </tr>
                 </thead>
@@ -135,7 +142,7 @@ require __DIR__ . '/../../includes/navbar.php';
                 let disabled = used.includes(opt.value) && opt.value !== select.value;
                 opt.disabled = disabled;
 
-                opt.textContent = (disabled ? '❌ ' : '') + opt.value + ' - ' + opt.dataset.name;
+                opt.textContent = (disabled ? '❌ ' : '') + opt.dataset.label;
                 opt.style.color = disabled ? '#dc3545' : '';
             });
         });
@@ -147,12 +154,17 @@ require __DIR__ . '/../../includes/navbar.php';
     function renderRow(i, row = null) {
 
         let options = '<option value="">Select</option>';
+
         parts.forEach(p => {
-            options += `<option value="${p.part_code}" 
-        ${row && p.part_code === row.part_code ? 'selected' : ''}
-        data-name="${p.part_name}"
-        data-supplier="${p.name_supplier || '-'}">
-        ${p.part_code} - ${p.part_name}</option>`;
+            let val = p.part_code + '__' + p.name_supplier;
+
+            options += `<option 
+            value="${val}"
+            ${row && row.part_code === p.part_code && row.name_supplier === p.name_supplier ? 'selected' : ''}
+            data-label="${p.part_code} - ${p.part_name} - ${p.name_supplier}"
+            data-supplier="${p.name_supplier}">
+            ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+        </option>`;
         });
 
         return `
@@ -161,13 +173,20 @@ require __DIR__ . '/../../includes/navbar.php';
 
 <td><select class="form-control part-select">${options}</select></td>
 
-<td class="name">${row?.part_name || '-'}</td>
-
 <td><input type="number" class="form-control qty" value="${row?.qty || ''}"></td>
 
 <td><input type="text" class="form-control unit" value="${row?.unit || 'Pcs'}"></td>
 
 <td class="supplier">${row?.name_supplier || '-'}</td>
+
+<td>
+<select class="form-control remark">
+    <option value="0" ${row?.remark == 0 ? 'selected' : ''}>MAIN</option>
+    <option value="1" ${row?.remark == 1 ? 'selected' : ''}>SUBSTITUTE</option>
+</select>
+</td>
+
+<td><span style="color:green;font-weight:bold">OK</span></td>
 
 <td><button class="btn btn-danger btn-sm del">X</button></td>
 </tr>`;
@@ -204,12 +223,13 @@ require __DIR__ . '/../../includes/navbar.php';
     });
 
     $(document).on("change", ".part-select", function() {
+
         let selected = $(this).find(":selected");
+        let supplier = selected.data("supplier") || '-';
 
         let row = $(this).closest("tr");
 
-        row.find(".name").text(selected.data("name") || '-');
-        row.find(".supplier").text(selected.data("supplier") || '-');
+        row.find(".supplier").text(supplier);
 
         refreshPartOptions();
     });
@@ -226,19 +246,34 @@ require __DIR__ . '/../../includes/navbar.php';
     $("#btnSave").click(function() {
 
         let data = [];
+        let used = new Set();
 
         $("#tableBody tr").each(function() {
 
-            let part_code = $(this).find(".part-select").val();
+            let val = $(this).find(".part-select").val();
+            let [part_code, supplier] = val.split("__");
+
             let qty = $(this).find(".qty").val();
             let unit = $(this).find(".unit").val();
+            let remark = $(this).find(".remark").val();
 
             if (!part_code || !qty) return;
+
+            let key = part_code + '__' + supplier;
+
+            if (used.has(key)) {
+                Swal.fire("Error", "Duplicate part tidak boleh!", "error");
+                return false;
+            }
+
+            used.add(key);
 
             data.push({
                 part_code,
                 qty,
-                unit
+                unit,
+                remark,
+                supplier
             });
         });
 

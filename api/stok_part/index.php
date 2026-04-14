@@ -9,13 +9,17 @@ try {
 
     $sql = "
         SELECT 
+            p.id_part,
             p.part_code,
             p.part_name,
-            COALESCE(SUM(d.remain),0) AS total_qty
+            COALESCE(SUM(d.remain),0) AS total_qty,
+            s.name_supplier AS supplier
         FROM tbl_part p
         LEFT JOIN tbl_detail_part d 
             ON d.part_code = p.part_code
             AND d.status = 'IN'
+            AND d.part_id = p.id_part
+        JOIN tbl_supplier s ON s.id_supplier = p.supplier
         WHERE 1=1
     ";
 
@@ -30,7 +34,7 @@ try {
     }
 
     $sql .= "
-        GROUP BY p.part_code, p.part_name
+        GROUP BY p.part_code, p.part_name, p.id_part
         ORDER BY p.part_code ASC
     ";
 

@@ -50,6 +50,10 @@ $parts = $pdo->query("SELECT part_code, part_name FROM tbl_part WHERE status_ass
 $lines = $pdo->query("SELECT line_id, line_name FROM tbl_line ORDER BY line_name ASC")->fetchAll(PDO::FETCH_ASSOC);
 $shifts = $pdo->query("SELECT * FROM tbl_shift ORDER BY shift ASC")->fetchAll(PDO::FETCH_ASSOC);
 
+$shiftMap = [];
+foreach ($shifts as $s) {
+    $shiftMap[$s['shift_id']] = $s['shift'];
+}
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
@@ -111,7 +115,7 @@ require __DIR__ . '/../../includes/navbar.php';
                         <?php foreach ($data as $shiftNo => $products): ?>
 
                             <div class="card shift-card p-5 mt-5" data-shift="<?= $shiftNo ?>">
-                                <h5>Shift <?= $shiftNo ?></h5>
+                                <h5>Shift <?= $shiftMap[$shiftNo] ?? $shiftNo ?></h5>
 
                                 <div class="products">
 

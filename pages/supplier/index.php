@@ -143,10 +143,19 @@ require __DIR__ . '/../../includes/footer.php';
 
         let file = e.target.files[0];
 
+
         if (!file) {
             Swal.fire({
                 icon: 'error',
                 title: 'File tidak ditemukan'
+            });
+            return;
+        }
+
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'File terlalu besar (max 2MB)'
             });
             return;
         }
@@ -183,8 +192,14 @@ require __DIR__ . '/../../includes/footer.php';
                         Object.values(row)[0]; // fallback kalau tanpa header
 
                     if (!name) return;
+                    let rawName = name;
+                    name = normalize(name);
 
-                    name = name.trim();
+                    // skip kalau kosong setelah normalize
+                    if (!name) return;
+
+                    // hindari duplicate di preview
+                    if (supplierData.includes(name)) return;
 
                     supplierData.push(name);
 
@@ -192,7 +207,7 @@ require __DIR__ . '/../../includes/footer.php';
 <tr>
 <td>${no}</td>
 <td>
-<input type="text" class="form-control supplier-input" value="${name}">
+<input type="text" class="form-control supplier-input" value="${rawName}">
 </td>
 </tr>
 `;

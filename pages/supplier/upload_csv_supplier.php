@@ -22,18 +22,10 @@ $created_by = $_SESSION['username'] ?? 'system';
 ============================= */
 function normalize($str)
 {
-    $str = trim($str);
-    $str = strtolower($str);
-
-    // hapus spasi berlebih
-    $str = preg_replace('/\s+/', ' ', $str);
-
-    // hapus tanda titik & koma (optional tapi disarankan)
-    $str = str_replace(['.', ','], '', $str);
-
+    $str = strtolower(trim($str));
+    $str = preg_replace('/[^a-z0-9]/', '', $str);
     return $str;
 }
-
 /* =============================
    PREPARE QUERY
 ============================= */

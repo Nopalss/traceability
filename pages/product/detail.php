@@ -26,7 +26,7 @@ if (!$product) {
 }
 
 /* =========================
-   GET DETAIL PRODUCT (FIX)
+   GET DETAIL PRODUCT
 ========================= */
 $stmt = $pdo->prepare("
     SELECT 
@@ -41,6 +41,7 @@ $stmt = $pdo->prepare("
         dp.created_at,
         dp.status,
         dp.location,
+        dp.out_date,
         s.name_supplier
     FROM tbl_detail_product dp
     LEFT JOIN tbl_line l ON l.line_id = dp.line_id
@@ -51,7 +52,26 @@ $stmt = $pdo->prepare("
 $stmt->execute([$productCode]);
 $details = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$totalProduced = count($details);
+/* =========================
+   GROUP BY SERIAL NUMBER
+========================= */
+$grouped = [];
+
+foreach ($details as $row) {
+    $serial = $row['serial_no'];
+
+    if (!isset($grouped[$serial])) {
+        $grouped[$serial] = [
+            'total_qty' => 0,
+            'rows' => []
+        ];
+    }
+
+    $grouped[$serial]['total_qty'] += $row['qty'];
+    $grouped[$serial]['rows'][] = $row;
+}
+
+$totalProduced = count($grouped);
 
 $_SESSION['menu'] = 'stok_product';
 $_SESSION['halaman'] = 'detail product';
@@ -67,10 +87,6 @@ require __DIR__ . '/../../includes/navbar.php';
         background: linear-gradient(135deg, #4e73df, #1cc88a);
         color: white;
         padding: 25px;
-    }
-
-    .summary-card h2 {
-        font-weight: 700;
     }
 
     .table-custom thead {
@@ -109,11 +125,20 @@ require __DIR__ . '/../../includes/navbar.php';
         color: #ad1457;
     }
 
+    .shift-3 {
+        background: #fce4ec;
+        color: #14ad96;
+    }
+
     .location-badge {
         background: #f3f4f6;
         padding: 5px 10px;
         border-radius: 15px;
         font-size: 12px;
+    }
+
+    .detail-table {
+        background: #f8f9fa;
     }
 </style>
 
@@ -130,15 +155,8 @@ require __DIR__ . '/../../includes/navbar.php';
 
         <!-- SUMMARY -->
         <div class="summary-card mb-5">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <h6>Total Lot</h6>
-                    <h2><?= $totalProduced ?></h2>
-                </div>
-                <div>
-                    <i class="fa fa-box fa-3x"></i>
-                </div>
-            </div>
+            <h6>Total Lot</h6>
+            <h2><?= $totalProduced ?></h2>
         </div>
 
         <!-- TABLE -->
@@ -150,76 +168,94 @@ require __DIR__ . '/../../includes/navbar.php';
                         <thead>
                             <tr>
                                 <th>No</th>
-                                <th>Lot No</th>
-                                <th>Qty</th>
-                                <th>Shift</th>
-                                <th>Line</th>
-                                <th>Operator</th>
-                                <th>Ref Number</th>
-                                <th>Location</th>
-                                <th>Status</th>
-                                <th>Tanggal</th>
+                                <th>Lot Number</th>
+                                <th>Total Qty</th>
+                                <th>Detail</th>
                             </tr>
                         </thead>
                         <tbody>
 
-                            <?php if ($details): ?>
-                                <?php foreach ($details as $i => $row): ?>
+                            <?php $no = 1;
+                            foreach ($grouped as $serial => $data): ?>
 
-                                    <?php
-                                    $locationName = ($row['location'] == 0 || $row['location'] == null)
-                                        ? 'Gudang'
-                                        : $row['name_supplier'];
+                                <?php $collapseId = 'serial_' . md5($serial); ?>
 
-                                    $statusClass = $row['status'] == 'in'
-                                        ? 'status-in'
-                                        : 'status-out';
-                                    ?>
-
-                                    <tr>
-                                        <td><?= $i + 1 ?></td>
-
-                                        <td><strong><?= htmlspecialchars($row['serial_no']) ?></strong></td>
-
-                                        <td><?= $row['qty'] ?></td>
-
-                                        <td>
-                                            <span class="badge-shift shift-<?= $row['shift'] ?>">
-                                                Shift <?= $row['shift'] ?>
-                                            </span>
-                                        </td>
-
-                                        <td><?= htmlspecialchars($row['line_name'] ?? '-') ?></td>
-
-                                        <td><?= htmlspecialchars($row['operator']) ?></td>
-
-                                        <td><?= htmlspecialchars($row['ref_number']) ?></td>
-
-                                        <td>
-                                            <span class="location-badge">
-                                                <?= htmlspecialchars($locationName) ?>
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <span class="badge-status <?= $statusClass ?>">
-                                                <?= strtoupper($row['status']) ?>
-                                            </span>
-                                        </td>
-
-                                        <td>
-                                            <?= date('d M Y H:i', strtotime($row['created_at'])) ?>
-                                        </td>
-                                    </tr>
-
-                                <?php endforeach ?>
-                            <?php else: ?>
+                                <!-- PARENT -->
                                 <tr>
-                                    <td colspan="10" class="text-center text-muted">
-                                        Belum ada data produksi.
+                                    <td><?= $no++ ?></td>
+                                    <td><strong><?= $serial ?></strong></td>
+                                    <td><?= number_format($data['total_qty']) ?></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info"
+                                            data-toggle="collapse"
+                                            data-target="#<?= $collapseId ?>">
+                                            Detail
+                                        </button>
                                     </td>
                                 </tr>
-                            <?php endif ?>
+
+                                <!-- CHILD -->
+                                <tr class="collapse detail-table" id="<?= $collapseId ?>">
+                                    <td colspan="4">
+
+                                        <table class="table table-sm table-bordered">
+                                            <thead>
+                                                <tr>
+                                                    <th>Ref Number</th>
+                                                    <th>Qty</th>
+                                                    <th>Shift</th>
+                                                    <th>Line</th>
+                                                    <th>Operator</th>
+                                                    <th>Status</th>
+                                                    <th>Tanggal Production</th>
+                                                    <th>Location</th>
+                                                    <th>Tanggal Keluar</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+
+                                                <?php foreach ($data['rows'] as $row):
+
+                                                    $locationName = ($row['location'] == 0 || $row['location'] == null)
+                                                        ? 'Gudang'
+                                                        : $row['name_supplier'];
+
+                                                    $statusClass = $row['status'] == 'in'
+                                                        ? 'status-in'
+                                                        : 'status-out';
+                                                ?>
+
+                                                    <tr>
+                                                        <td><?= $row['ref_number'] ?></td>
+                                                        <td><?= $row['qty'] ?></td>
+                                                        <td>
+                                                            <span class="badge-shift shift-<?= $row['shift'] ?>">
+                                                                Shift <?= $row['shift'] ?>
+                                                            </span>
+                                                        </td>
+                                                        <td><?= $row['line_name'] ?? '-' ?></td>
+                                                        <td><?= $row['operator'] ?></td>
+                                                        <td>
+                                                            <span class="badge-status <?= $statusClass ?>">
+                                                                <?= strtoupper($row['status']) ?>
+                                                            </span>
+                                                        </td>
+                                                        <td><?= date('d M Y H:i', strtotime($row['created_at'])) ?></td>
+                                                        <td><?= $locationName ?></td>
+                                                        <td>
+                                                            <?= $row['out_date'] ? date('d M Y H:i', strtotime($row['out_date'])) : '-' ?>
+                                                        </td>
+                                                    </tr>
+
+                                                <?php endforeach; ?>
+
+                                            </tbody>
+                                        </table>
+
+                                    </td>
+                                </tr>
+
+                            <?php endforeach; ?>
 
                         </tbody>
                     </table>

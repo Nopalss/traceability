@@ -125,12 +125,12 @@ require __DIR__ . '/../../includes/navbar.php';
 
                             <div class="row mb-3">
                                 <div class="col">
-                                    <label>Product Name</label>
-                                    <input id="product_name" class="form-control" disabled>
+                                    <label>Ref number</label>
+                                    <input id="ref_number" class="form-control" disabled>
                                 </div>
                                 <div class="col">
                                     <label>Production Date</label>
-                                    <input id="created_at" class="form-control" disabled>
+                                    <input id="product_name" class="form-control" disabled>
                                 </div>
                             </div>
 
@@ -138,6 +138,10 @@ require __DIR__ . '/../../includes/navbar.php';
                                 <div class="col">
                                     <label>Location (Customer)</label>
                                     <input id="location_name" class="form-control" disabled>
+                                </div>
+                                <div class="col">
+                                    <label>Production Date</label>
+                                    <input id="created_at" class="form-control" disabled>
                                 </div>
                             </div>
 
@@ -165,6 +169,7 @@ require __DIR__ . '/../../includes/navbar.php';
         const alertBox = document.getElementById('scan-alert');
 
         const serialField = document.getElementById('serial_no');
+        const refField = document.getElementById('ref_number');
         const productField = document.getElementById('product_code');
         const nameField = document.getElementById('product_name');
         const dateField = document.getElementById('created_at');
@@ -327,6 +332,7 @@ require __DIR__ . '/../../includes/navbar.php';
             productField.value = data.product_code ?? '';
             nameField.value = data.product_name ?? '';
             dateField.value = data.created_at ?? '';
+            locationField.value = data.location ?? '';
             locationField.value = data.location ?? '';
 
             statusBadge.innerHTML =

@@ -67,10 +67,10 @@ $stmt = $pdo->prepare("
     FROM tbl_detail_product dp
     LEFT JOIN tbl_part p ON dp.product_code = p.part_code
     WHERE dp.product_code = ?
-      AND dp.serial_no = ?
+      AND dp.serial_no = ? AND dp.ref_number=?
     LIMIT 1
 ");
-$stmt->execute([$product_code, $serial_no]);
+$stmt->execute([$product_code, $serial_no, $ref_number]);
 $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
 if (!$product) {

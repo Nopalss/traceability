@@ -11,6 +11,7 @@
 
     const btnExecute = document.getElementById('btn-execute');
     const inputRaw = document.getElementById('qr_raw');
+    const supplier = document.getElementById('supplier');
     const alertBox = document.getElementById('scan-alert');
 
     const field = {
@@ -22,19 +23,28 @@
     };
 
     /* ===============================
-       AUTO FOCUS SCANNER
+       AUTO FOCUS (SANTAI + AMAN)
     =============================== */
 
-    function focusScanner() {
-        if (inputRaw) inputRaw.focus();
-    }
 
-    window.addEventListener('load', focusScanner);
+    // fokus saat halaman load
+    // window.addEventListener('load', () => {
+    //     inputRaw.focus();
+    // });
 
-    document.addEventListener('click', () => {
-        focusScanner();
+    // jika user mengetik apapun di halaman dan textarea kosong
+    document.addEventListener('keydown', function (e) {
+
+        if (document.activeElement !== inputRaw) {
+
+            // kalau scanner mulai mengetik
+            if (e.key.length === 1) {
+                inputRaw.focus();
+            }
+
+        }
+
     });
-
 
     /* ===============================
        DETECT SCAN (ENTER / NEWLINE)
@@ -44,7 +54,7 @@
 
         const value = inputRaw.value;
 
-        // scanner biasanya menambahkan newline
+        // scanner biasanya kirim newline di akhir
         if (value.includes('\n') || value.includes('\r')) {
 
             const cleaned = value.replace(/[\r\n]/g, '').trim();
@@ -96,7 +106,7 @@
     function clearRaw() {
 
         inputRaw.value = '';
-        focusScanner();
+        inputRaw.focus();// balik fokus setelah scan selesai
 
     }
 
@@ -114,12 +124,21 @@
             return;
         }
 
+        if (!supplier.value) {
+            showAlert('error', 'Pilih supplier terlebih dahulu');
+            supplier.focus();
+            return;
+        }
+
         btnExecute.disabled = true;
 
         fetch(apiScan, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ qr_raw: raw })
+            body: JSON.stringify({
+                qr_raw: raw,
+                supplier: supplier.value
+            })
         })
             .then(res => {
                 if (!res.ok) throw new Error("HTTP error");

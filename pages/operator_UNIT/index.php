@@ -16,8 +16,6 @@ $today    = date('Y-m-d');
 // SHIFT MASTER
 $shiftStmt = $pdo->query("SELECT * FROM tbl_shift");
 $shiftMaster = $shiftStmt->fetchAll(PDO::FETCH_ASSOC);
-$ngStmt = $pdo->query("SELECT * FROM tbl_ng_type");
-$ngMaster = $ngStmt->fetchAll(PDO::FETCH_ASSOC);
 
 $currentShift = 1; // default
 $h = date('G');
@@ -807,7 +805,6 @@ function jamLabel($jam)
 
         $.get('ajax_operator.php', {
             action: 'load_bom',
-            line: lineId,
             assy
         }, r => {
 
@@ -1051,7 +1048,6 @@ function jamLabel($jam)
 
         $.get('ajax_operator.php', {
             action: 'load_bom',
-            line: lineId,
             assy
         }, r => {
 
@@ -2077,9 +2073,10 @@ placeholder="NG Qty">
 <select id="ngReason"
 class="swal2-input">
 
-<?php foreach ($ngMaster as $ng): ?>
-    <option value="<?= $ng['ng_code'] ?>"><?= $ng['ng_code'] ?></option>
-    <?php endforeach; ?>
+<option value="DAMAGE">Damage</option>
+<option value="SCRATCH">Scratch</option>
+<option value="MISS_PROCESS">Miss Process</option>
+<option value="OTHER">Other</option>
 
 </select>
 

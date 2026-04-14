@@ -1,14 +1,9 @@
 <?php
 require_once __DIR__ . '/../../includes/config.php';
 
-$sql = "SELECT part_code, part_name FROM tbl_part WHERE status_assy = 1  ORDER BY part_code ASC";
-$parts = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-
-$sql = "SELECT line_id, line_name FROM tbl_line ORDER BY line_name ASC";
-$lines = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-
-$sql = "SELECT * FROM tbl_shift ORDER BY shift ASC";
-$shifts = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+$parts = $pdo->query("SELECT part_code, part_name FROM tbl_part WHERE status_assy = 1 ORDER BY part_code ASC")->fetchAll(PDO::FETCH_ASSOC);
+$lines = $pdo->query("SELECT line_id, line_name FROM tbl_line ORDER BY line_name ASC")->fetchAll(PDO::FETCH_ASSOC);
+$shifts = $pdo->query("SELECT * FROM tbl_shift ORDER BY shift ASC")->fetchAll(PDO::FETCH_ASSOC);
 
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
@@ -16,63 +11,70 @@ require __DIR__ . '/../../includes/navbar.php';
 ?>
 
 <style>
+    .card-modern {
+        border-radius: 16px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, .06);
+        border: none;
+    }
+
     .shift-card {
-        border-radius: 12px;
-        box-shadow: 0 5px 15px rgba(0, 0, 0, .05)
+        background: #f8fafc;
+    }
+
+    .line-card {
+        background: #fff;
+        border-left: 4px solid #22c55e;
     }
 
     .product-card {
-        border: 1px solid #eee;
-        border-radius: 10px;
+        background: #f9fafb;
+        border-radius: 12px;
         padding: 15px;
         margin-top: 15px;
-        position: relative
+        position: relative;
     }
 
-    .remove-product {
+    .remove-btn {
         position: absolute;
+        top: 10px;
         right: 10px;
-        top: 10px
+    }
+
+    .finish-box {
+        font-weight: bold;
+        color: #16a34a;
+    }
+
+    .material-table td {
+        vertical-align: middle;
     }
 </style>
 
 <div class="content pt-0">
     <div class="container">
-        <div class="card">
+        <div class="card card-modern">
             <div class="card-body">
 
-                <h3 class="mb-5">Production Planning</h3>
+                <h3 class="mb-4">🚀 Production Planning (Smart Mode)</h3>
 
                 <form method="post" action="<?= BASE_URL ?>controllers/production_planning/create.php">
 
                     <label>Date</label>
-                    <input type="date" name="production_date" class="form-control" required min="<?= date('Y-m-d') ?>" onkeydown="return false">
+                    <input type="date" name="production_date" class="form-control" required>
 
-                    <label class="mt-3">Line</label>
-                    <select name="line_id" class="form-control" required>
-                        <option value="">Select</option>
-                        <?php foreach ($lines as $l): ?>
-                            <option value="<?= $l['line_id'] ?>"><?= $l['line_name'] ?></option>
-                        <?php endforeach ?>
-                    </select>
-
-                    <!-- 🔥 SHIFT CHECKLIST -->
                     <label class="mt-3">Pilih Shift</label>
-                    <div id="shiftChecklist">
-                        <?php foreach ($shifts as $i => $s): ?>
-                            <div>
-                                <input type="checkbox" class="shift-check" value="<?= $i + 1 ?>">
-                                Shift <?= $s['shift'] ?>
-                            </div>
-                        <?php endforeach ?>
-                    </div>
+                    <?php foreach ($shifts as $s): ?>
+                        <div>
+                            <input type="checkbox" class="shift-check" value="<?= $s['shift_id'] ?>">
+                            Shift <?= $s['shift'] ?>
+                        </div>
+                    <?php endforeach ?>
 
                     <hr>
-                    <div id="shiftWrapper"></div>
+                    <div id="wrapper"></div>
 
-                    <div class="text-right mt-7">
-                        <a href="<?= BASE_URL ?>pages/production_planning/" class="btn btn-outline-danger">Batal</a>
-                        <button class="btn btn-success" id="submitBtn">Submit</button>
+                    <div class="text-right mt-4">
+                        <button class="btn btn-success">Submit</button>
                     </div>
 
                 </form>
@@ -84,39 +86,186 @@ require __DIR__ . '/../../includes/navbar.php';
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
 
-
 <script>
     let shifts = <?= json_encode($shifts) ?>;
+    let lines = <?= json_encode($lines) ?>;
 
-    $('input[type="date"]').on('click focus', function() {
-        this.showPicker();
+    // ================= SHIFT =================
+    $(document).on('change', '.shift-check', function() {
+        $('#wrapper').html('');
+        $('.shift-check:checked').each(function() {
+            renderShift($(this).val());
+        });
     });
 
-    $(document).on('wheel', 'input[type=number]', function(e) {
-        $(this).blur();
+    function renderShift(id) {
+        let shift = shifts.find(s => s.shift_id == id);
+
+        let html = `
+    <div class="card card-modern shift-card p-4 mt-4" data-id="${id}">
+        <h5>Shift ${shift.shift}</h5>
+        <div class="lines"></div>
+        <button type="button" class="btn btn-primary btn-sm add-line mt-2">+ Line</button>
+    </div>`;
+
+        $('#wrapper').append(html);
+    }
+
+    // ================= LINE =================
+    $(document).on('click', '.add-line', function() {
+        let card = $(this).closest('.shift-card');
+        let shiftId = card.data('id');
+
+        let html = `
+    <div class="line-card p-3 mt-3">
+        <button type="button" class="btn btn-danger btn-sm remove-btn remove-line">×</button>
+
+        <label>Line</label>
+        <select class="form-control line-select" name="line[${shiftId}][]">
+            <option value="">Select</option>
+            ${lines.map(l=>`<option value="${l.line_id}">${l.line_name}</option>`).join('')}
+        </select>
+
+        <div class="products"></div>
+        <button type="button" class="btn btn-success btn-sm add-product mt-2">+ Product</button>
+    </div>`;
+
+        card.find('.lines').append(html);
     });
 
-    $(document).on('keydown', 'input[type=number]', function(e) {
-        if (e.which === 38 || e.which === 40) e.preventDefault();
+    // ================= PRODUCT =================
+    $(document).on('click', '.add-product', function() {
+
+        let lineCard = $(this).closest('.line-card');
+        let index = Date.now() + Math.floor(Math.random() * 1000);
+
+        let html = `
+<div class="product-card" data-index="${index}">
+<button type="button" class="btn btn-danger btn-sm remove-btn remove-product">×</button>
+
+<div class="row">
+<div class="col">
+<label>Target</label>
+<input type="number" class="form-control target">
+</div>
+<div class="col">
+<label>Cycle</label>
+<input type="number" class="form-control cycle">
+</div>
+<div class="col d-flex align-items-end">
+<button type="button" class="btn btn-dark generate load-material">Generate</button>
+</div>
+</div>
+
+<select class="form-control mt-3 product-select">
+<option value="">Model</option>
+<?php foreach ($parts as $p): ?>
+<option value="<?= $p['part_code'] ?>"><?= $p['part_code'] ?> - <?= $p['part_name'] ?></option>
+<?php endforeach ?>
+</select>
+
+<table class="table table-sm mt-3 time-table"></table>
+<table class="table table-bordered mt-3 material-table"></table>
+
+</div>`;
+
+        lineCard.find('.products').append(html);
     });
 
-    // ======================
-    // ORIGINAL (TETAP)
-    // ======================
-    $('#shiftCount').change(function() {
-        $('#shiftWrapper').html('');
-        let count = parseInt($(this).val());
-        for (let s = 1; s <= count; s++) renderShift(s);
-    });
 
-    // ======================
-    // RENDER SHIFT
-    // ======================
-    function renderShift(shiftNo) {
+    // ================= GENERATE =================
+    $(document).on('click', '.generate', function() {
 
-        let shift = shifts[shiftNo - 1];
+        let card = $(this).closest('.product-card');
+        let index = card.data('index');
+
+        let shiftId = card.closest('.shift-card').data('id');
+        let lineId = card.closest('.line-card').find('.line-select').val();
+        let product = card.find('.product-select').val();
+
+        if (!product || !lineId) return alert('Line & Model wajib');
+
+        // ================= RESET MATERIAL =================
+        card.find('.material-table').html('');
+
+        // ================= SAVE PRODUCT =================
+        if (!card.find('.hidden-product').length) {
+            card.append(`<input type="hidden" 
+        name="product_code[${shiftId}][${lineId}][${index}]" 
+        value="${product}">`);
+        }
+
+        let shift = shifts.find(s => s.shift_id == shiftId);
+        let target = parseInt(card.find('.target').val()) || 0;
+        let cycle = parseInt(card.find('.cycle').val()) || 1;
+
+        let current = shift.start * 60;
+        let produced = 0;
+        let hourly = {};
+
+        function pad(n) {
+            return String(n).padStart(2, '0');
+        }
+
+        function formatTime(min) {
+            let h = Math.floor(min / 60) % 24;
+            let m = Math.floor(min % 60);
+            return `${pad(h)}:${pad(m)}`;
+        }
+
+        function getBreakInfo(hourStart, hourEnd) {
+            let info = [];
+
+            if (shift.time_coffe) {
+                let s = shift.time_coffe;
+                let e = s + shift.duration_time;
+                if (s < hourEnd && e > hourStart) {
+                    info.push(`Coffee ${formatTime(s)}-${formatTime(e)}`);
+                }
+            }
+
+            if (shift.break_makan) {
+                let s = shift.break_makan;
+                let e = s + shift.duration_bm;
+                if (s < hourEnd && e > hourStart) {
+                    info.push(`Break ${formatTime(s)}-${formatTime(e)}`);
+                }
+            }
+
+            return info.join(', ');
+        }
+
+        function isBreak(min) {
+            let rel = min - (shift.start * 60);
+
+            if (shift.time_coffe) {
+                let s = shift.time_coffe - (shift.start * 60);
+                if (rel >= s && rel < s + shift.duration_time) return true;
+            }
+
+            if (shift.break_makan) {
+                let s = shift.break_makan - (shift.start * 60);
+                if (rel >= s && rel < s + shift.duration_bm) return true;
+            }
+
+            return false;
+        }
+
+        // ================= SIMULASI =================
+        while (produced < target) {
+            if (!isBreak(current)) {
+                let h = Math.floor(current / 60);
+                hourly[h] = (hourly[h] || 0) + 1;
+
+                produced++;
+                current += cycle / 60;
+            } else {
+                current++;
+            }
+        }
+
+        // ================= BUILD JAM =================
         let hours = [];
-
         if (shift.start < shift.end) {
             for (let i = shift.start; i < shift.end; i++) hours.push(i);
         } else {
@@ -124,304 +273,98 @@ require __DIR__ . '/../../includes/navbar.php';
             for (let i = 0; i < shift.end; i++) hours.push(i);
         }
 
-        let html = `
-<div class="card shift-card p-5 mt-5" data-shift="${shiftNo}">
-<h5>Shift ${shiftNo}</h5>
-<div class="products"></div>
-<button type="button" class="btn btn-sm btn-primary addProduct mt-3">+ Product</button>
-</div>`;
-
-        $('#shiftWrapper').append(html);
-        let card = $('#shiftWrapper .shift-card').last();
-
-        card.data('hours', hours);
-        card.data('shiftData', shift);
-
-        addProduct(card, shiftNo);
-    }
-
-    // ======================
-    // CHECKLIST SHIFT
-    // ======================
-    $(document).on('change', '.shift-check', function() {
-        $('#shiftWrapper').html('');
-        $('.shift-check:checked').each(function() {
-            renderShift(parseInt($(this).val()));
-        });
-    });
-
-    // ======================
-    // HELPER
-    // ======================
-    function toggleRemove(card) {
-        let count = card.find('.product-card').length;
-        if (count <= 1) card.find('.remove-product').hide();
-        else card.find('.remove-product').show();
-    }
-
-    function getOverlap(start1, end1, start2, end2) {
-        let start = Math.max(start1, start2);
-        let end = Math.min(end1, end2);
-        return Math.max(0, end - start);
-    }
-
-    // ======================
-    // ❌ GENERATE LAMA (DIMATIKAN)
-    // ======================
-    $(document).on('click', '.generate', function() {
-        return;
-    });
-
-    // ======================
-    // ADD PRODUCT (UPDATED)
-    // ======================
-    function addProduct(card, shiftNo) {
-
-        let hours = card.data('hours');
-        let idx = card.find('.product-card').length;
-
-        let html = `<div class="product-card">
-<button type="button" class="btn btn-sm btn-danger remove-product">×</button>
-
-<!-- 🔥 INPUT PER PRODUCT -->
-<div class="row mb-3">
-    <div class="col">
-        <label>Target</label>
-        <input type="number" class="form-control target-product" min="0">
-    </div>
-    <div class="col">
-        <label>Cycle Time (detik)</label>
-        <input type="number" class="form-control cycle-product" min="1">
-    </div>
-    <div class="col d-flex align-items-end">
-        <button type="button" class="btn btn-success generate-product">Generate</button>
-    </div>
-</div>
-
-<select name="product_code[${shiftNo}][]" class="form-control mb-3 product-select" required>
-<option value="">Select Product</option>
-<?php foreach ($parts as $p): ?>
-<option value="<?= $p['part_code'] ?>"><?= $p['part_code'] ?> - <?= $p['part_name'] ?></option>
-<?php endforeach ?>
-</select>
-
-<table class="table table-sm">`;
+        let table = '';
+        let total = 0;
 
         hours.forEach(h => {
-            let n = (h + 1) % 24;
-            html += `
+
+            let next = (h + 1) % 24;
+            let val = hourly[h] || 0;
+            total += val;
+
+            let hourStart = h * 60;
+            let hourEnd = (next === 0 ? 24 : next) * 60;
+
+            let breakInfo = getBreakInfo(hourStart, hourEnd);
+            let jam = `${pad(h)}:00-${pad(next)}:00`;
+
+            table += `
 <tr>
-<td>${h}:00 - ${n}:00</td>
 <td>
-<input type="number" min="0" class="form-control qty"
-name="qty[${shiftNo}][${idx}][]" value="0">
-<input type="hidden"
-name="jam[${shiftNo}][${idx}][]"
-value="${h}:00-${n}:00">
+${jam}
+${breakInfo ? `<div style="font-size:11px;color:#f59e0b;">${breakInfo}</div>` : ''}
+</td>
+<td>
+<input name="qty[${shiftId}][${lineId}][${index}][${jam}]" 
+value="${val}" class="form-control" >
 </td>
 </tr>`;
         });
 
-        html += `
+        // ================= OT =================
+        let ot = 0;
+        Object.keys(hourly).forEach(h => {
+            if (!hours.includes(parseInt(h))) ot += hourly[h];
+        });
+
+        table += `
 <tr>
-<td><b>Overtime</b></td>
+<td>OT</td>
 <td>
-<input type="number" min="0" class="form-control qty"
-name="qty[${shiftNo}][${idx}][]" value="0">
-<input type="hidden"
-name="jam[${shiftNo}][${idx}][]"
-value="OT">
+<input name="qty[${shiftId}][${lineId}][${index}][OT]" 
+value="${ot}" class="form-control" >
 </td>
-</tr>
+</tr>`;
 
-<tr><td><b>Total</b></td><td><b class="total">0</b></td></tr>
-</table>
+        card.find('.time-table').html(table);
 
-<div class="material-status mt-2"></div>
-</div>`;
+        // ================= FINISH =================
+        let fh = Math.floor(current / 60) % 24;
+        let fm = Math.floor(current % 60);
 
-        card.find('.products').append(html);
-        toggleRemove(card);
-    }
-
-    // ======================
-    // 🔥 GENERATE PER PRODUCT (FINAL)
-    // ======================
-    $(document).on('click', '.generate-product', function() {
-
-        let productCard = $(this).closest('.product-card');
-        let shiftCard = $(this).closest('.shift-card');
-
-        let target = parseInt(productCard.find('.target-product').val()) || 0;
-        let cycle = parseInt(productCard.find('.cycle-product').val()) || 1;
-
-        if (target <= 0 || cycle <= 0) return;
-
-        let hours = shiftCard.data('hours');
-        let shift = shiftCard.data('shiftData');
-
-        let capacities = [];
-        let totalCapacity = 0;
-
-        hours.forEach(h => {
-
-            let startHour = h * 60;
-            let endHour = (h + 1) * 60;
-
-            let minutes = 60;
-
-            if (shift.time_coffe && shift.duration_time) {
-                let s = shift.time_coffe;
-                let e = s + shift.duration_time;
-                minutes -= getOverlap(startHour, endHour, s, e);
-            }
-
-            if (shift.break_makan && shift.duration_bm) {
-                let s = shift.break_makan;
-                let e = s + shift.duration_bm;
-                minutes -= getOverlap(startHour, endHour, s, e);
-            }
-
-            if (minutes < 0) minutes = 0;
-
-            let cap = Math.floor((minutes * 60) / cycle);
-
-            capacities.push(cap);
-            totalCapacity += cap;
-        });
-
-        if (totalCapacity === 0) {
-            alert('Tidak ada kapasitas produksi');
-            return;
+        if (!card.find('.finish-box').length) {
+            card.append(`<div class="finish-box mt-2"></div>`);
         }
 
-        let distributed = [];
-        let overtime = 0;
+        card.find('.finish-box').html(`
+Selesai: ${pad(fh)}:${pad(fm)}
+${ot>0?'<span style="color:red">(Overtime)</span>':''}
+`);
 
-        if (target <= totalCapacity) {
+        // ================= LOAD MATERIAL (AUTO) =================
+        $.post("<?= BASE_URL ?>controllers/production_planning/get_material.php", {
+            product,
+            target
+        }, function(res) {
 
-            distributed = capacities.map(c => Math.floor((c / totalCapacity) * target));
+            let html = `<tr>
+<th>Pilih</th><th>Part</th><th>Supplier</th><th>Type</th><th>Stock</th><th>Need</th><th>Shortage</th>
+</tr>`;
 
-            let sum = distributed.reduce((a, b) => a + b, 0);
-            let diff = target - sum;
+            res.forEach(r => {
+                let isShort = r.shortage > 0;
 
-            for (let i = 0; i < diff; i++) {
-                distributed[i % distributed.length]++;
-            }
+                html += `
+<tr ${isShort?'style="background:#ffe5e5"':''}>
+<td>
+<input type="checkbox"
+name="material[${shiftId}][${lineId}][${index}][]"
+value="${r.part_id}"
+${r.remark==0 && r.stock > 0?'checked':''}
+>
+</td>
+<td>${r.part_code}</td>
+<td>${r.supplier ?? '-'}</td>
+<td>${r.remark==0?'MAIN':'SUB'}</td>
+<td style="color:${isShort?'red':'green'}">${r.stock}</td>
+<td>${r.need}</td>
+<td style="color:${isShort?'red':'green'}">${r.shortage}</td>
+</tr>`;
+            });
 
-        } else {
-            distributed = [...capacities];
-            overtime = target - totalCapacity;
-        }
+            card.find('.material-table').html(html);
 
-        let inputs = productCard.find('.qty');
+        }, 'json');
 
-        inputs.each(function(i) {
-
-            if (i === inputs.length - 1) {
-                $(this).val(overtime);
-            } else {
-                $(this).val(distributed[i] || 0);
-            }
-
-        });
-
-        productCard.find('.qty').trigger('input');
     });
-
-    // ======================
-    // ADD PRODUCT BUTTON
-    // ======================
-    $(document).on('click', '.addProduct', function() {
-        let card = $(this).closest('.shift-card');
-        let shiftNo = card.data('shift');
-        addProduct(card, shiftNo);
-    });
-    // ======================
-    // 🔥 HITUNG TOTAL + VALIDATE
-    // ======================
-    $(document).on('input change', '.qty, .product-select', function() {
-
-        if ($(this).hasClass('qty') && $(this).val() < 0) {
-            $(this).val(0);
-        }
-
-        let box = $(this).closest('.product-card');
-        let sum = 0;
-
-        box.find('.qty').each(function() {
-            sum += parseInt($(this).val()) || 0;
-        });
-
-        box.find('.total').text(sum);
-
-        validateAll();
-    });
-
-    function validateAll() {
-
-        let products = [];
-
-        $('.product-card').each(function() {
-
-            let productCode = $(this).find('.product-select').val();
-            let total = parseInt($(this).find('.total').text()) || 0;
-
-            if (productCode && total > 0) {
-                products.push({
-                    product_code: productCode,
-                    qty: total
-                });
-            }
-        });
-
-        if (products.length === 0) {
-            $('.material-status').html('');
-            $('#submitBtn').prop('disabled', false);
-            return;
-        }
-
-        $.post(
-            "<?= BASE_URL ?>controllers/production_planning/check_material_global.php", {
-                products: products
-            },
-            function(res) {
-
-                $('.material-status').html('');
-
-                let adaKekurangan = false;
-
-                res.details.forEach(d => {
-
-                    $('.product-card').each(function() {
-
-                        let code = $(this).find('.product-select').val();
-
-                        if (String(code) === String(d.product)) {
-
-                            let alertClass = d.status === 'kurang' ?
-                                'alert-danger' :
-                                'alert-success';
-
-                            if (d.status === 'kurang') {
-                                adaKekurangan = true;
-                            }
-
-                            $(this).find('.material-status').append(
-                                `<div class="alert ${alertClass} py-2 mb-2">
-                                <b>${d.part_name}</b><br>
-                                Kebutuhan: ${d.needed}<br>
-                                Stok Tersedia: ${d.available}<br>
-                                Kekurangan: ${d.shortage}
-                            </div>`
-                            );
-                        }
-                    });
-                });
-
-                $('#submitBtn').prop('disabled', adaKekurangan);
-            },
-            'json'
-        );
-    }
 </script>

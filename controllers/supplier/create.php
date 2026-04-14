@@ -10,6 +10,16 @@ $response = [
     'message' => 'Invalid request'
 ];
 
+/* =============================
+   NORMALIZE FUNCTION (SAMA DENGAN CSV API)
+============================= */
+function normalize($str)
+{
+    $str = strtolower(trim($str));
+    $str = preg_replace('/[^a-z0-9]/', '', $str);
+    return $str;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
@@ -29,19 +39,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Nama supplier wajib diisi.');
         }
 
-        // Cek duplicate supplier
-        $check = $pdo->prepare("
-            SELECT id_supplier 
+        // VALIDASI: minimal harus ada huruf
+        if (!preg_match('/[a-zA-Z]/', $name_supplier)) {
+            throw new Exception('Nama supplier tidak valid.');
+        }
+
+        $normalized_input = normalize($name_supplier);
+
+        /* =============================
+           AMBIL SEMUA SUPPLIER (BIAR CONSISTENT)
+        ============================= */
+        $dbSuppliers = $pdo->query("
+            SELECT name_supplier 
             FROM tbl_supplier 
-            WHERE LOWER(name_supplier) = LOWER(:name)
-            AND status = 'supplier'
-        ");
+            WHERE status='supplier'
+        ")->fetchAll(PDO::FETCH_COLUMN);
 
-        $check->execute([
-            ':name' => $name_supplier
-        ]);
+        // normalize semua
+        $dbNormalized = array_map(function ($s) {
+            return normalize($s);
+        }, $dbSuppliers);
 
-        if ($check->fetch()) {
+        // ubah jadi hash (lebih cepat)
+        $dbNormalized = array_flip($dbNormalized);
+
+        /* =============================
+           CEK DUPLICATE (STRONG)
+        ============================= */
+        if (isset($dbNormalized[$normalized_input])) {
             throw new Exception('Supplier sudah ada.');
         }
 

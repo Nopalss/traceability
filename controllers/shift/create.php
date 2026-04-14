@@ -42,8 +42,19 @@ try {
     $start_minutes = $start * 60;
     $end_minutes   = $end * 60;
 
-    if ($time_coffe !== null && ($time_coffe < $start_minutes || $time_coffe > $end_minutes)) {
-        throw new Exception('Coffee break harus di dalam jam shift');
+    if ($time_coffe !== null) {
+
+        if ($start_minutes < $end_minutes) {
+            // shift normal
+            if ($time_coffe < $start_minutes || $time_coffe > $end_minutes) {
+                throw new Exception('Coffee break harus di dalam jam shift');
+            }
+        } else {
+            // shift malam (lintas hari)
+            if ($time_coffe < $start_minutes && $time_coffe > $end_minutes) {
+                throw new Exception('Coffee break harus di dalam jam shift');
+            }
+        }
     }
 
     // =====================
@@ -80,11 +91,12 @@ try {
     // =====================
     $stmt = $pdo->prepare("
         INSERT INTO tbl_shift 
-        (shift, start, end, time_coffe, duration_time, break_makan, duration_bm)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        (shift_id, shift, start, end, time_coffe, duration_time, break_makan, duration_bm)
+        VALUES (?,?, ?, ?, ?, ?, ?, ?)
     ");
 
     $stmt->execute([
+        $shift,
         $shift,
         $start,
         $end,

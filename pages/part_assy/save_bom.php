@@ -32,9 +32,7 @@ try {
     $checkModel->execute([$model]);
 
     if ($checkModel->rowCount() > 0) {
-
         $pdo->rollBack();
-
         echo json_encode([
             "status" => "error",
             "msg" => "Model / Part Assy sudah terdaftar!"
@@ -65,11 +63,11 @@ try {
     $checkPart->execute([$assyCode]);
 
     $checkSti = $pdo->prepare("
-    SELECT id_supplier 
-    FROM tbl_supplier 
-    WHERE name_supplier = :name 
-    AND status = :status
-");
+        SELECT id_supplier 
+        FROM tbl_supplier 
+        WHERE name_supplier = :name 
+        AND status = :status
+    ");
 
     $checkSti->execute([
         'name' => 'PT. STI',
@@ -99,37 +97,60 @@ try {
     }
 
     /* =========================
-   4.5 CEK DUPLICATE PART DI BOM
-========================= */
+       4.5 CEK DUPLICATE (PART + SUPPLIER)
+    ========================== */
     $uniqueCheck = [];
 
     foreach ($items as $item) {
 
         $code = trim($item['part_code'] ?? '');
+        $supplier = trim($item['supplier'] ?? '');
 
         if (!$code) continue;
 
-        if (isset($uniqueCheck[$code])) {
-            throw new Exception("Duplicate part_code terdeteksi: $code");
+        $key = $code . '__' . $supplier;
+
+        if (isset($uniqueCheck[$key])) {
+            throw new Exception("Duplicate part terdeteksi: $key");
         }
 
-        $uniqueCheck[$code] = true;
+        $uniqueCheck[$key] = true;
     }
+
+    /* =========================
+       PREPARE QUERY
+    ========================== */
+    $getSupplier = $pdo->prepare("
+        SELECT id_supplier 
+        FROM tbl_supplier 
+        WHERE name_supplier = :name 
+        AND status = 'supplier'
+    ");
+
+    $getPart = $pdo->prepare("
+        SELECT id_part 
+        FROM tbl_part 
+        WHERE part_code = :code 
+        AND supplier = :supplier
+    ");
+
+    $insertBOM = $pdo->prepare("
+        INSERT INTO tbl_part_assy 
+        (part_assy, part_code, qty, unit, remark, part_id)
+        VALUES (?, ?, ?, ?, ?, ?)
+    ");
+
     /* =========================
        5. INSERT BOM DETAIL
     ========================== */
-    $insertBOM = $pdo->prepare("
-        INSERT INTO tbl_part_assy (part_assy, part_code, qty, unit)
-        VALUES (?, ?, ?, ?)
-    ");
-
     foreach ($items as $item) {
 
         $part_code = trim($item['part_code'] ?? '');
         $qty       = (int)($item['qty'] ?? 0);
         $unit      = trim($item['unit'] ?? 'Pcs');
+        $remark    = (int)($item['remark'] ?? 0);
+        $supplier_name = trim($item['supplier'] ?? '');
 
-        // VALIDASI PER ITEM
         if (!$part_code) {
             throw new Exception("Ada part_code kosong");
         }
@@ -138,11 +159,47 @@ try {
             throw new Exception("Qty tidak valid di part: $part_code");
         }
 
+        if (!$supplier_name) {
+            throw new Exception("Supplier kosong di part: $part_code");
+        }
+
+        /* =========================
+           GET SUPPLIER ID
+        ========================== */
+        $getSupplier->execute([
+            'name' => $supplier_name
+        ]);
+
+        $supplier_id = $getSupplier->fetchColumn();
+
+        if (!$supplier_id) {
+            throw new Exception("Supplier tidak ditemukan: $supplier_name");
+        }
+
+        /* =========================
+           GET PART ID
+        ========================== */
+        $getPart->execute([
+            'code' => $part_code,
+            'supplier' => $supplier_id
+        ]);
+
+        $part_id = $getPart->fetchColumn();
+
+        if (!$part_id) {
+            throw new Exception("Part tidak ditemukan: $part_code - $supplier_name");
+        }
+
+        /* =========================
+           INSERT BOM
+        ========================== */
         $insertBOM->execute([
             $assyCode,
             $part_code,
             $qty,
-            $unit
+            $unit,
+            $remark,
+            $part_id
         ]);
     }
 

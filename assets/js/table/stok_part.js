@@ -55,6 +55,10 @@ var KTDatatableLocalSortDemo = function () {
                     title: 'Total',
 
                 }, {
+                    field: 'supplier',
+                    title: 'Supplier',
+
+                }, {
                     field: 'Actions',
                     title: 'Actions',
                     sortable: false,
@@ -63,7 +67,7 @@ var KTDatatableLocalSortDemo = function () {
                     autoHide: false,
                     template: function (row) {
                         return `\
-                       <a href="${HOST_URL}pages/stok_part/detail.php?part_code=${row.part_code}"
+                       <a href="${HOST_URL}pages/stok_part/detail.php?part_code=${row.id_part}"
                                class="btn btn-sm btn-info btn-icon mr-2">
                                 <i class="flaticon-eye"></i>
                             </a>

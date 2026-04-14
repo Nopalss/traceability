@@ -36,7 +36,7 @@ if (!$productTotals) {
 }
 
 /* ================================
-   CHECK MATERIAL GLOBAL
+   CHECK MATERIAL GLOBAL (FIXED)
 ================================ */
 
 $allDetails = [];
@@ -44,33 +44,87 @@ $hasShortage = false;
 
 foreach ($productTotals as $product => $totalQty) {
 
-    // Ambil BOM + nama part
     $stmt = $pdo->prepare("
-        SELECT pa.part_code, pa.qty, p.part_name
+        SELECT 
+            pa.part_code,
+            pa.qty,
+            pa.remark,
+            pa.part_id,
+            p.part_name,
+            s.name_supplier
         FROM tbl_part_assy pa
-        JOIN tbl_part p ON p.part_code = pa.part_code
+        JOIN tbl_part p ON p.id_part = pa.part_id
+        LEFT JOIN tbl_supplier s ON s.id_supplier = p.supplier
         WHERE pa.part_assy = ?
+        ORDER BY pa.part_code
     ");
     $stmt->execute([$product]);
     $bom = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+    // ================= GROUP =================
+    $grouped = [];
+
     foreach ($bom as $b) {
 
-        $partCode = $b['part_code'];
-        $partName = $b['part_name'];
-        $need     = $b['qty'] * $totalQty;
+        $key = $b['part_code']; // tetap grouping by part_code
 
-        // Total stock gudang
+        if (!isset($grouped[$key])) {
+            $grouped[$key] = [];
+        }
+
+        $grouped[$key][] = $b;
+    }
+
+    // ================= PROCESS =================
+    foreach ($grouped as $parts) {
+
+        // pisahkan main & subs
+        $main = null;
+        $subs = [];
+
+        foreach ($parts as $p) {
+            if ($p['remark'] == 0) $main = $p;
+            else $subs[] = $p;
+        }
+
+        if (!$main) continue;
+
+        $needed = $main['qty'] * $totalQty;
+
+        // ================= CHECK MAIN =================
         $stockStmt = $pdo->prepare("
             SELECT COALESCE(SUM(remain),0)
             FROM tbl_detail_part
             WHERE part_code = ?
+            AND part_id = ?
             AND status = 'IN'
         ");
-        $stockStmt->execute([$partCode]);
-        $stock = (int)$stockStmt->fetchColumn();
 
-        $shortage = $need - $stock;
+        $stockStmt->execute([$main['part_code'], $main['part_id']]);
+        $stockMain = (int)$stockStmt->fetchColumn();
+
+        $usedPart = $main;
+        $available = $stockMain;
+        $usedType = 'MAIN';
+
+        // ================= SUBSTITUTE =================
+        if ($stockMain < $needed && count($subs) > 0) {
+
+            foreach ($subs as $sub) {
+
+                $stockStmt->execute([$sub['part_code'], $sub['part_id']]);
+                $stockSub = (int)$stockStmt->fetchColumn();
+
+                if ($stockSub >= $needed) {
+                    $usedPart = $sub;
+                    $available = $stockSub;
+                    $usedType = 'SUBSTITUTE';
+                    break;
+                }
+            }
+        }
+
+        $shortage = $needed - $available;
 
         if ($shortage > 0) {
             $hasShortage = true;
@@ -78,10 +132,11 @@ foreach ($productTotals as $product => $totalQty) {
 
         $allDetails[] = [
             'product'   => $product,
-            'part_code' => $partCode,
-            'part_name' => $partName,
-            'needed'    => $need,
-            'available' => $stock,
+            'part_code' => $usedPart['part_code'],
+            'part_name' => $usedPart['part_name'] . " (" . $usedType . ")",
+            'supplier'  => $usedPart['name_supplier'] ?? '-',
+            'needed'    => $needed,
+            'available' => $available,
             'shortage'  => $shortage > 0 ? $shortage : 0,
             'status'    => $shortage > 0 ? 'kurang' : 'cukup'
         ];

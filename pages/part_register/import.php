@@ -116,24 +116,37 @@ require __DIR__ . '/../../includes/navbar.php';
     /* ==============================
        NORMALIZE FUNCTION
     ============================== */
-    function normalize(str) {
+    function normalizeCode(str) {
+        return (str || "")
+            .toString()
+            .trim()
+            .replace(/\s+/g, '');
+    }
+
+    function normalizeName(str) {
         return (str || "")
             .toString()
             .trim()
             .toLowerCase()
-            .replace(/\s+/g, " ");
+            .replace(/\s*,\s*/g, ',')
+            .replace(/\s+/g, ' ');
     }
 
     /* ==============================
        CSV READ
     ============================== */
-
     $("#csvFile").change(function(e) {
 
         let file = e.target.files[0];
 
         if (!file) {
             Swal.fire("Error", "File tidak ditemukan", "error");
+            return;
+        }
+
+        // 🔥 LIMIT FILE SIZE
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire("Warning", "File terlalu besar (max 2MB)", "warning");
             return;
         }
 
@@ -150,7 +163,6 @@ require __DIR__ . '/../../includes/navbar.php';
                 let html = `
 <div class="table-responsive">
 <table class="table table-hover table-bordered">
-
 <thead class="thead-light">
 <tr>
 <th width="60">#</th>
@@ -159,7 +171,6 @@ require __DIR__ . '/../../includes/navbar.php';
 <th>Supplier</th>
 </tr>
 </thead>
-
 <tbody>
 `;
 
@@ -184,13 +195,18 @@ require __DIR__ . '/../../includes/navbar.php';
 
                     if (!part_code) return;
 
+                    let codeNorm = normalizeCode(part_code);
+
+                    // 🔥 SKIP DUPLICATE CSV
+
+
                     let supplierOptions = "";
 
                     supplierList.forEach(function(s) {
 
                         let selected = "";
 
-                        if (normalize(s.name_supplier) === normalize(supplier)) {
+                        if (normalizeName(s.name_supplier) === normalizeName(supplier)) {
                             selected = "selected";
                         }
 
@@ -207,7 +223,7 @@ ${s.name_supplier}
 <td class="text-center">${no}</td>
 
 <td>
-<input type="text" class="form-control part_code" value="${part_code}">
+<input type="text" class="form-control part_code" value="${codeNorm}">
 </td>
 
 <td>
@@ -244,37 +260,34 @@ ${supplierOptions}
     /* ==============================
        UPLOAD
     ============================== */
-
     $("#uploadPartBtn").click(function() {
 
         let data = [];
 
         $("#previewArea tbody tr").each(function() {
 
-            let part_code = $(this).find(".part_code").val().trim();
-            let part_name = $(this).find(".part_name").val().trim();
+            let part_code = normalizeCode($(this).find(".part_code").val());
+            let part_name = normalizeName($(this).find(".part_name").val());
             let supplier = $(this).find(".supplier").val();
 
-            if (part_code !== "") {
-                data.push({
-                    part_code: part_code,
-                    part_name: part_name,
-                    supplier: supplier
-                });
-            }
+            if (!part_code) return;
+
+            // 🔥 VALIDASI NUMERIC
+            if (!/^[0-9]+$/.test(part_code)) return;
+
+            // 🔥 SKIP DUPLICATE FINAL
+
+            data.push({
+                part_code: part_code,
+                part_name: part_name.toUpperCase(),
+                supplier: supplier
+            });
 
         });
 
         if (data.length === 0) {
-
-            Swal.fire(
-                "Warning",
-                "Tidak ada data untuk di upload",
-                "warning"
-            );
-
+            Swal.fire("Warning", "Tidak ada data untuk di upload", "warning");
             return;
-
         }
 
         $.ajax({
@@ -292,9 +305,7 @@ ${supplierOptions}
                     title: "Uploading...",
                     text: "Processing data",
                     allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading()
-                    }
+                    didOpen: () => Swal.showLoading()
                 });
 
             },
@@ -302,15 +313,12 @@ ${supplierOptions}
             success: function(r) {
 
                 Swal.fire({
-
                     icon: "success",
                     title: "Import Result",
-
                     html: `
 <b>Inserted :</b> ${r.inserted}<br>
 <b>Rejected :</b> ${r.rejected}
 `
-
                 }).then(() => {
                     location.reload();
                 });

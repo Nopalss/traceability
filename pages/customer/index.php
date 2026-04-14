@@ -48,9 +48,7 @@ require __DIR__ . '/../../includes/navbar.php';
     </div>
 </div>
 
-
 <!-- MODAL IMPORT -->
-
 <div class="modal fade" id="importCSVModal">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -67,10 +65,8 @@ require __DIR__ . '/../../includes/navbar.php';
                     <br>
                     <a href="<?= BASE_URL ?>pages/customer/customer.csv" download
                         class="btn btn-light-primary btn-sm">
-
                         <i class="fas fa-download mr-1"></i>
                         Download Template
-
                     </a>
                 </div>
 
@@ -97,7 +93,6 @@ require __DIR__ . '/../../includes/navbar.php';
 require __DIR__ . '/../../includes/footer.php';
 ?>
 
-<!-- ✅ PapaParse -->
 <script src="<?= BASE_URL ?>assets/js/papaparse.min.js"></script>
 
 <script>
@@ -108,9 +103,20 @@ require __DIR__ . '/../../includes/footer.php';
     });
 
     /* =============================
-       READ CSV (FIXED)
+       NORMALIZE
     ============================= */
+    function normalize(str) {
+        return (str || "")
+            .toString()
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, " ")
+            .replace(/[^a-z0-9 ]/g, '');
+    }
 
+    /* =============================
+       READ CSV
+    ============================= */
     $("#csvFile").change(function(e) {
 
         let file = e.target.files[0];
@@ -123,8 +129,16 @@ require __DIR__ . '/../../includes/footer.php';
             return;
         }
 
-        Papa.parse(file, {
+        // limit file size
+        if (file.size > 2 * 1024 * 1024) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'File terlalu besar (max 2MB)'
+            });
+            return;
+        }
 
+        Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
 
@@ -132,6 +146,7 @@ require __DIR__ . '/../../includes/footer.php';
 
                 let rows = results.data;
                 customerData = [];
+                let customerSet = new Set();
 
                 let html = `
 <table class="table table-bordered table-hover">
@@ -152,68 +167,70 @@ require __DIR__ . '/../../includes/footer.php';
                         row["Customer"] ||
                         row["customer"] ||
                         row["CUSTOMER"] ||
-                        Object.values(row)[0]; // fallback kalau tanpa header
+                        Object.values(row)[0];
 
                     if (!name) return;
 
-                    name = name.trim();
+                    let rawName = name.trim();
+                    let normalized = normalize(rawName);
 
-                    customerData.push(name);
+                    if (!normalized) return;
+
+                    if (customerSet.has(normalized)) return;
+
+                    customerSet.add(normalized);
+                    customerData.push(normalized);
 
                     html += `
 <tr>
 <td>${no}</td>
 <td>
-<input type="text" class="form-control customer-input" value="${name}">
+<input type="text" class="form-control customer-input" value="${rawName}">
 </td>
 </tr>
 `;
 
                     no++;
-
                 });
 
                 html += "</tbody></table>";
-
                 $("#previewArea").html(html);
-
             }
-
         });
-
     });
 
     /* =============================
        UPLOAD
     ============================= */
-
     $("#uploadCustomerBtn").click(function() {
 
         let customers = [];
 
         $(".customer-input").each(function() {
 
-            let name = $(this).val().trim();
+            let name = $(this).val();
+            let normalized = normalize(name);
 
-            if (name !== '') {
-                customers.push(name);
-            }
+            if (!normalized) return;
 
+            // validasi minimal ada huruf
+            if (!/[a-z]/i.test(normalized)) return;
+
+            customers.push(normalized);
         });
 
-        if (customers.length === 0) {
+        // remove duplicate final
+        customers = [...new Set(customers)];
 
+        if (customers.length === 0) {
             Swal.fire({
                 icon: 'warning',
                 title: 'Tidak ada data customer'
             });
-
             return;
-
         }
 
         $.ajax({
-
             url: "upload_csv_customer.php",
             type: "POST",
             data: {
@@ -221,16 +238,12 @@ require __DIR__ . '/../../includes/footer.php';
             },
 
             beforeSend: function() {
-
                 Swal.fire({
                     title: 'Uploading...',
                     text: 'Sedang memproses customer',
                     allowOutsideClick: false,
-                    didOpen: () => {
-                        Swal.showLoading()
-                    }
+                    didOpen: () => Swal.showLoading()
                 });
-
             },
 
             success: function(res) {
@@ -253,19 +266,14 @@ Customer ditolak : ${data.rejected}
                 }).then(() => {
                     location.reload();
                 });
-
             },
 
             error: function() {
-
                 Swal.fire({
                     icon: 'error',
                     title: 'Server Error'
                 });
-
             }
-
         });
-
     });
 </script>

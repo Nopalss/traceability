@@ -46,7 +46,7 @@ $(document).ready(function () {
                     didOpen: () => Swal.showLoading()
                 });
 
-                fetch(`${HOST_URL}controllers/Customer/create.php`, {
+                fetch(`${HOST_URL}controllers/customer/create.php`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -119,7 +119,7 @@ $(document).ready(function () {
                     didOpen: () => Swal.showLoading()
                 });
 
-                fetch(`${HOST_URL}controllers/Customer/edit.php`, {
+                fetch(`${HOST_URL}controllers/customer/edit.php`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

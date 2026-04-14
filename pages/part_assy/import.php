@@ -3,7 +3,7 @@ require_once __DIR__ . '/../../includes/config.php';
 
 $_SESSION['halaman'] = 'part assy';
 $_SESSION['menu']    = 'part_assy';
-$_SESSION['subHalaman'] = ' | Import CSV';
+$_SESSION['subHalaman'] = ' | Create Part Assy';
 $sql = "
 SELECT 
     p.part_code, 
@@ -28,12 +28,12 @@ require __DIR__ . '/../../includes/navbar.php';
 
         <div class="card shadow-sm">
             <div class="card-header">
-                <h3>Import BOM CSV</h3>
+                <h3>Create Bom List</h3>
                 <a href="<?= BASE_URL ?>pages/part_assy/Bom_List.csv" download
                     class="btn btn-light-primary btn-sm">
 
                     <i class="fas fa-download mr-1"></i>
-                    Download Template
+                    Download Template CSV
 
                 </a>
             </div>
@@ -78,10 +78,11 @@ require __DIR__ . '/../../includes/navbar.php';
                             <tr>
                                 <th>No</th>
                                 <th>Part Code</th>
-                                <th>Part Name</th>
+                                <!-- <th>Part Name</th> -->
                                 <th>Qty</th>
                                 <th>Unit</th>
                                 <th>Supplier</th>
+                                <th>Remark</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -151,36 +152,44 @@ require __DIR__ . '/../../includes/navbar.php';
     /* ======================
        RENDER ROW
     ====================== */
-    function renderRow(i, code = '', name = '-', qty = '', unit = '', supplier = '-', error = false) {
+    function renderRow(i, code = '', name = '-', qty = '', unit = '', supplier = '-', remark = 0, error = false, isCsvSupplier = 0) {
 
         let options = '<option value="">Select</option>';
         parts.forEach(p => {
-            options += `<option value="${p.part_code}" 
-        ${p.part_code === code ? 'selected' : ''} 
-        data-name="${p.part_name}"
-        data-supplier="${p.name_supplier || '-'}">
-    ${p.part_code} - ${p.part_name}</option>`;
+            options += `<option 
+    value="${p.part_code}__${p.name_supplier}"
+    ${p.part_code === code && p.name_supplier === supplier ? 'selected' : ''}
+    data-code="${p.part_code}"
+    data-name="${p.part_name}"
+    data-supplier="${p.name_supplier || '-'}">
+    ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+</option>`;
         });
 
         return `
-<tr ${error ? 'style="background:#ffe5e5"' : ''}>
-<td class="no"></td>
+<tr data-csv-supplier="${isCsvSupplier}" ${error ? 'style="background:#ffe5e5"' : ''}>
+<td class="no" style="font-size: .69rem"></td>
 
 <td>
-<select class="form-control part-select">${options}</select>
+<select class="form-control part-select" style="font-size: .69rem">${options}</select>
 </td>
 
-<td class="name">${name}</td>
 
-<td><input type="number" class="form-control qty" value="${qty}"></td>
+<td><input type="number" class="form-control qty" value="${qty}" style="font-size: .69rem"></td>
 
-<td><input type="text" class="form-control unit" value="${unit || 'Pcs'}"></td>
+<td><input type="text" class="form-control unit" value="${unit || 'Pcs'}" style="font-size: .69rem"></td>
 
-<td class="supplier">${supplier}</td>
+<td class="supplier" style="font-size: .69rem">${supplier}</td>
+<td>
+<select class="form-control remark" style="font-size: .69rem" >
+    <option value="0" ${remark == 0 ? 'selected' : ''}>MAIN</option>
+    <option value="1" ${remark == 1 ? 'selected' : ''}>SUBSTITUTE</option>
+</select>
+</td>
 
-<td>${error ? '<span style="color:red;font-weight:bold">NOT FOUND</span>' : '<span style="color:green;font-weight:bold">OK</span>'}</td>
+<td style="font-size: .69rem">${error ? '<span style="color:red;font-weight:bold">NOT FOUND</span>' : '<span style="color:green;font-weight:bold">OK</span>'}</td>
 
-<td><button class="btn btn-danger btn-sm del">X</button></td>
+<td style="font-size: .69rem"><button class="btn btn-danger btn-sm del">X</button></td>
 </tr>`;
     }
 
@@ -202,12 +211,24 @@ require __DIR__ . '/../../includes/navbar.php';
         let qty = row[2]?.trim();
         let unit = row[3]?.trim();
 
+        // 🔥 SAFE parsing
+        let supplier = row[4] ? row[4].trim() : '';
+        let remarkRaw = row[5] ? row[5].trim().toUpperCase() : '';
+
         if (!partCode || !/^[A-Za-z0-9]+$/.test(partCode)) return null;
+
+        let remark = 0; // default MAIN
+
+        if (remarkRaw === 'SUBSTITUTE') {
+            remark = 1;
+        }
 
         return {
             partCode,
             qty,
-            unit: unit || 'Pcs'
+            unit: unit || 'Pcs',
+            supplier,
+            remark
         };
     }
 
@@ -251,15 +272,23 @@ require __DIR__ . '/../../includes/navbar.php';
                     let parsed = parseRow(rows[i]);
                     if (!parsed) continue;
 
-                    let part = parts.find(p => p.part_code === parsed.partCode);
+                    let part = parts.find(p =>
+                        p.part_code === parsed.partCode &&
+                        p.name_supplier === parsed.supplier
+                    );
+                    if (!part) {
+                        part = parts.find(p => p.part_code === parsed.partCode);
+                    }
 
                     if (part) {
+                        let isCsvSupplier = parsed.supplier ? 1 : 0;
+                        let supplierFinal = parsed.supplier || part.name_supplier;
                         $("#tableBody").append(
-                            renderRow(index, parsed.partCode, part.part_name, parsed.qty, parsed.unit, part.name_supplier, false)
+                            renderRow(index, parsed.partCode, part.part_name, parsed.qty, parsed.unit, supplierFinal, parsed.remark, false, isCsvSupplier)
                         );
                     } else {
                         $("#tableBody").append(
-                            renderRow(index, parsed.partCode, '-', parsed.qty, parsed.unit, '-', true)
+                            renderRow(index, parsed.partCode, '-', parsed.qty, parsed.unit, '-', parsed.remark, true, 0)
                         );
                     }
 
@@ -277,7 +306,7 @@ require __DIR__ . '/../../includes/navbar.php';
        ADD ROW
     ====================== */
     $("#btnAddRow").click(function() {
-        $("#tableBody").append(renderRow($("#tableBody tr").length, '', '-', '', 'Pcs', '-'));
+        $("#tableBody").append(renderRow($("#tableBody tr").length, '', '-', '', 'Pcs', '-', 0));
         renumber();
         refreshPartOptions();
     });
@@ -294,8 +323,9 @@ require __DIR__ . '/../../includes/navbar.php';
 
         let row = $(this).closest("tr");
 
-        row.find(".name").text(name);
-        row.find(".supplier").text(supplier);
+        if (!row.data("csv-supplier")) {
+            row.find(".supplier").text(supplier);
+        }
 
         refreshPartOptions(); // 🔥 penting
     });
@@ -309,13 +339,12 @@ require __DIR__ . '/../../includes/navbar.php';
         refreshPartOptions(); // 🔥 penting
     });
 
-    /* ======================
-       SAVE (SWEETALERT)
-    ====================== */
+
     $("#btnSave").click(function() {
 
         let data = [];
         let error = false;
+        let used = new Set(); // 🔥 duplicate guard
 
         let model = $("#modelName").val().trim();
         let assy = $("#assyCode").val().trim();
@@ -326,17 +355,28 @@ require __DIR__ . '/../../includes/navbar.php';
         }
 
         $("#tableBody tr").each(function() {
-
-            let part_code = $(this).find(".part-select").val();
-            let qty = $(this).find(".qty").val();
-            let unit = $(this).find(".unit").val();
+            let val = $(this).find(".part-select").val();
+            let [part_code, supplier_select] = val.split("__");
+            let qty = parseFloat($(this).find(".qty").val());
+            let unit = $(this).find(".unit").val().trim();
             let status = $(this).find("td:eq(6)").text();
-
+            let remark = $(this).find(".remark").val();
+            let supplier = $(this).find(".supplier").text();
             if (!part_code || !qty || !unit) {
                 Swal.fire("Error", "Masih ada data kosong!", "error");
                 error = true;
                 return false;
             }
+
+            let key = part_code + '__' + supplier;
+
+            if (used.has(key)) {
+                Swal.fire("Error", "Duplicate part tidak boleh!", "error");
+                error = true;
+                return false;
+            }
+
+            used.add(key);
 
             if (status.includes("NOT FOUND")) {
                 Swal.fire("Error", "Masih ada part tidak valid!", "error");
@@ -344,20 +384,28 @@ require __DIR__ . '/../../includes/navbar.php';
                 return false;
             }
 
-            if (qty <= 0) {
+            if (isNaN(qty) || qty <= 0) {
                 Swal.fire("Error", "Qty harus > 0!", "error");
                 error = true;
                 return false;
             }
 
+            // normalize unit
+            unit = unit.charAt(0).toUpperCase() + unit.slice(1).toLowerCase();
+
             data.push({
                 part_code,
                 qty,
-                unit
+                unit,
+                remark,
+                supplier
             });
         });
 
         if (error || data.length === 0) return;
+
+        // 🔥 disable button biar ga double klik
+        $("#btnSave").prop("disabled", true);
 
         Swal.fire({
             title: "Simpan data?",
@@ -365,7 +413,10 @@ require __DIR__ . '/../../includes/navbar.php';
             showCancelButton: true
         }).then(result => {
 
-            if (!result.isConfirmed) return;
+            if (!result.isConfirmed) {
+                $("#btnSave").prop("disabled", false);
+                return;
+            }
 
             $.ajax({
                 url: "<?= BASE_URL ?>pages/part_assy/save_bom.php",
@@ -385,6 +436,8 @@ require __DIR__ . '/../../includes/navbar.php';
                 },
                 success: function(res) {
 
+                    $("#btnSave").prop("disabled", false);
+
                     if (res.status === "success") {
                         Swal.fire("Success", res.msg, "success")
                             .then(() => location.reload());
@@ -394,6 +447,7 @@ require __DIR__ . '/../../includes/navbar.php';
 
                 },
                 error: () => {
+                    $("#btnSave").prop("disabled", false);
                     Swal.fire("Error", "Gagal menyimpan!", "error");
                 }
             });

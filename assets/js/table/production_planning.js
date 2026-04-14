@@ -74,15 +74,25 @@ var KTDatatableLocalSortDemo = function () {
                                class="btn btn-sm btn-info btn-icon mr-2">
                                 <i class="flaticon-eye"></i>
                             </a>
-                            <a href="${HOST_URL}pages/production_planning/edit.php?pp_code=${row.pp_code}"
-                               class="btn btn-sm btn-warning btn-icon mr-2">
-                                <i class="flaticon-edit"></i>
-                            </a>
                             <a onclick="confirmDeleteTemplate('${row.pp_code}', 'controllers/production_planning/delete.php')"
                                class="btn btn-sm btn-danger btn-icon">
                                 <i class="flaticon-delete"></i>
                             </a>
                         `;
+                        // return `
+                        //     <a href="${HOST_URL}pages/production_planning/detail.php?pp_code=${row.pp_code}"
+                        //        class="btn btn-sm btn-info btn-icon mr-2">
+                        //         <i class="flaticon-eye"></i>
+                        //     </a>
+                        //     <a href="${HOST_URL}pages/production_planning/edit.php?pp_code=${row.pp_code}"
+                        //        class="btn btn-sm btn-warning btn-icon mr-2">
+                        //         <i class="flaticon-edit"></i>
+                        //     </a>
+                        //     <a onclick="confirmDeleteTemplate('${row.pp_code}', 'controllers/production_planning/delete.php')"
+                        //        class="btn btn-sm btn-danger btn-icon">
+                        //         <i class="flaticon-delete"></i>
+                        //     </a>
+                        // `;
                     }
                 }
             ]

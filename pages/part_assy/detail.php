@@ -7,12 +7,18 @@ if ($partAssy === '') {
 }
 
 // ================================
-// Ambil BOM
+// Ambil BOM (FIXED pakai part_id)
 // ================================
 $stmt = $pdo->prepare("
-    SELECT pa.part_code, pa.qty, pa.unit, p.part_name, s.name_supplier
+    SELECT 
+        pa.part_code,
+        pa.qty,
+        pa.unit,
+        pa.remark,
+        p.part_name,
+        s.name_supplier
     FROM tbl_part_assy pa
-    JOIN tbl_part p ON pa.part_code = p.part_code
+    JOIN tbl_part p ON pa.part_id = p.id_part
     JOIN tbl_supplier s ON p.supplier = s.id_supplier
     WHERE pa.part_assy = :part_assy
 ");
@@ -32,6 +38,9 @@ $stmt = $pdo->prepare("
 $stmt->execute([':part_code' => $partAssy]);
 $part = $stmt->fetch(PDO::FETCH_ASSOC);
 
+// ================================
+// Ambil Model
+// ================================
 $getModel = $pdo->prepare("
     SELECT id, name 
     FROM tbl_model 
@@ -43,6 +52,7 @@ $getModel->execute([
 ]);
 
 $model = $getModel->fetch(PDO::FETCH_ASSOC);
+
 $_SESSION['halaman'] = 'part assy';
 $_SESSION['menu'] = 'part_assy';
 $_SESSION['subHalaman'] = '| Detail Part Assy';
@@ -55,7 +65,7 @@ require __DIR__ . '/../../includes/navbar.php';
 <div class="content d-flex flex-column flex-column-fluid pt-0" id="kt_content">
     <div class="container">
 
-        <!-- HEADER SUMMARY -->
+        <!-- HEADER -->
         <div class="card mb-7">
             <div class="card-body">
                 <h3 class="mb-6">Part Assembly Detail</h3>
@@ -74,8 +84,6 @@ require __DIR__ . '/../../includes/navbar.php';
                         <div class="text-muted">Part Name</div>
                         <div class="font-weight-bolder"><?= htmlspecialchars($part['part_name']) ?></div>
                     </div>
-
-
                 </div>
 
                 <hr>
@@ -103,7 +111,7 @@ require __DIR__ . '/../../includes/navbar.php';
             </div>
         </div>
 
-        <!-- COMPONENT TABLE -->
+        <!-- TABLE -->
         <div class="card">
             <div class="card-body">
                 <h4 class="mb-5">Assembly Components</h4>
@@ -118,6 +126,7 @@ require __DIR__ . '/../../includes/navbar.php';
                                 <th class="text-center" width="80">Qty</th>
                                 <th class="text-center" width="80">Unit</th>
                                 <th>Supplier</th>
+                                <th>Remark</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -131,11 +140,16 @@ require __DIR__ . '/../../includes/navbar.php';
                                         <td class="text-center"><?= $row['qty'] ?></td>
                                         <td class="text-center"><?= $row['unit'] ?></td>
                                         <td><?= $row['name_supplier'] ?></td>
+                                        <td>
+                                            <?= $row['remark'] == 0
+                                                ? '<span class="badge badge-success">MAIN</span>'
+                                                : '<span class="badge badge-warning">SUBSTITUTE</span>' ?>
+                                        </td>
                                     </tr>
                                 <?php endforeach; ?>
                             <?php else: ?>
                                 <tr>
-                                    <td colspan="5"
+                                    <td colspan="7"
                                         class="text-center text-muted font-weight-bolder">
                                         No component defined for this assembly
                                     </td>

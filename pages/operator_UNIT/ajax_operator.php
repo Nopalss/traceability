@@ -9,24 +9,23 @@ $action = $_REQUEST['action'] ?? '';
 if ($action == 'load_bom') {
 
     $assy = $_GET['assy'] ?? '';
-    $line = $_GET['line'] ?? '';
+
     $q = $pdo->prepare("
         SELECT pa.part_code,
-       p.part_name,
-       pa.qty,
-       am.lot_no,
-       am.spq,
-       am.ref_number,
-       am.remain
-FROM tbl_part_assy pa
-JOIN tbl_part p ON p.part_code = pa.part_code
-LEFT JOIN tbl_active_material am 
-    ON am.part_code = pa.part_code 
-    AND am.line_id = ?
-WHERE pa.part_assy = ?
+               p.part_name,
+               pa.qty,
+               am.lot_no,
+               am.spq,
+               am.ref_number,
+               am.remain
+        FROM tbl_part_assy pa
+        JOIN tbl_part p ON p.part_code = pa.part_code
+        LEFT JOIN tbl_active_material am ON am.part_code = pa.part_code
+        WHERE pa.part_assy = ?
     ");
 
-    $q->execute([$line, $assy]);
+    $q->execute([$assy]);
+
     foreach ($q as $r) {
         echo "<tr>
             <td>{$r['part_code']}</td>
@@ -140,10 +139,10 @@ if ($action == 'scan_material') {
     $cekLot = $pdo->prepare("
         SELECT id
         FROM tbl_active_material
-        WHERE part_code=? AND lot_no=? AND ref_number=?
+        WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
         LIMIT 1
     ");
-    $cekLot->execute([$part, $lot, $ref]);
+    $cekLot->execute([$part, $lot, $line, $ref]);
     $lotRow = $cekLot->fetch(PDO::FETCH_ASSOC);
     if ($lotRow && !$mode) {
         echo json_encode(['error' => true, 'message' => 'Material(ref) Sudah di Scan']);
@@ -1716,7 +1715,26 @@ if ($action == 'remove_active_material') {
 
         $remain = intval($row['remain']);
 
+        if ($remain > 0) {
 
+            $pdo->prepare("
+            INSERT INTO tbl_material_loss
+            (part_code,lost_qty,old_remain,operator,reason,assy,ref_number,shift,line_id)
+            VALUES (?,?,?,?,?,?,?,?,?)
+            ")->execute([
+
+                $part,
+                $remain,
+                $remain,
+                $operator,
+                'CLOSE LOT',
+                '',
+                $row['ref_number'],
+                0,
+                $line
+
+            ]);
+        }
 
         $pdo->prepare("
         DELETE FROM tbl_active_material
@@ -1858,6 +1876,7 @@ if ($action == 'adjust_material') {
 /* =====================================================
    MATERIAL NG
 ===================================================== */
+
 if ($action == 'material_ng') {
 
     $part   = $_POST['part'] ?? '';
@@ -1880,17 +1899,15 @@ if ($action == 'material_ng') {
 
         $pdo->beginTransaction();
 
-        // =========================
-        // CEK MATERIAL AKTIF
-        // =========================
         $q = $pdo->prepare("
-            SELECT *
-            FROM tbl_active_material
-            WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
-            LIMIT 1
+        SELECT *
+        FROM tbl_active_material
+        WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+        LIMIT 1
         ");
 
         $q->execute([$part, $lot, $line, $ref]);
+
         $row = $q->fetch(PDO::FETCH_ASSOC);
 
         if (!$row) {
@@ -1901,39 +1918,38 @@ if ($action == 'material_ng') {
             throw new Exception("NG qty melebihi remain");
         }
 
-        // =========================
-        // INSERT KE tbl_ng_part
-        // =========================
-        $pdo->prepare("
-            INSERT INTO tbl_ng_part
-            (ng_id, part_code, lot_no, used_qty, ng_qty, ng_type, ref_part, created_at)
-            VALUES (0, ?, ?, ?, ?, ?, ?, NOW())
-        ")->execute([
-            $part,
-            $lot,
-            0,
-            $qty,
-            $reason,
-            $ref
-        ]);
-
-        // =========================
-        // UPDATE ACTIVE MATERIAL
-        // =========================
         $pdo->prepare("
             UPDATE tbl_active_material
             SET remain = remain - ?
             WHERE id=?
         ")->execute([$qty, $row['id']]);
 
-        // =========================
-        // UPDATE INCOMING
-        // =========================
+
+        /* UPDATE INCOMING */
+
         $pdo->prepare("
             UPDATE tbl_detail_part
             SET remain = remain - ?
-            WHERE ref_number=?
-        ")->execute([$qty, $ref]);
+            WHERE lot_no=?
+        ")->execute([$qty, $lot]);
+
+        $pdo->prepare("
+        INSERT INTO tbl_material_loss
+        (part_code,lost_qty,old_remain,operator,reason,assy,ref_number,shift,line_id)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ")->execute([
+
+            $part,
+            $qty,
+            $row['remain'],
+            $operator,
+            $reason,
+            '',
+            $row['ref_number'],
+            $shift,
+            $line
+
+        ]);
 
         $pdo->commit();
 

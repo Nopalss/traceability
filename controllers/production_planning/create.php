@@ -8,21 +8,17 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     redirect('pages/production_planning/');
 }
 
-// ================================
-// HEADER DATA
-// ================================
+// ================= DATA =================
 $productionDate = sanitize($_POST['production_date'] ?? '');
-$lineId = (int)($_POST['line_id'] ?? 0);
 
+$lines = $_POST['line'] ?? [];
 $productCodes = $_POST['product_code'] ?? [];
 $qtys = $_POST['qty'] ?? [];
-$jams = $_POST['jam'] ?? [];
+$materials = $_POST['material'] ?? [];
 
-// ================================
-// BASIC VALIDATION
-// ================================
-if ($productionDate === '' || $lineId <= 0 || empty($productCodes)) {
-    setAlert('error', 'Oops!', 'Data production planning belum lengkap.', 'danger', 'Coba Lagi');
+// ================= VALIDATION =================
+if ($productionDate === '' || empty($productCodes)) {
+    setAlert('error', 'Oops!', 'Data tidak lengkap', 'danger', 'OK');
     redirect('pages/production_planning/create.php');
 }
 
@@ -30,14 +26,9 @@ try {
 
     $pdo->beginTransaction();
 
-    // ================================
-    // GENERATE PP CODE (GROUP ID)
-    // ================================
     $ppCode = 'PP-' . str_replace('-', '', $productionDate) . '-' . strtoupper(substr(uniqid(), -4));
 
-    // ================================
-    // PREPARE HEADER INSERT
-    // ================================
+    // ================= PREPARE =================
     $insertPP = $pdo->prepare("
         INSERT INTO tbl_production_planning
         (pp_code, line_id, product_code, shift, production_date, qty, total_qty, status)
@@ -45,9 +36,6 @@ try {
         (:pp_code, :line_id, :product_code, :shift, :production_date, :qty, :total_qty, 'planned')
     ");
 
-    // ================================
-    // PREPARE DETAIL INSERT
-    // ================================
     $insertDetail = $pdo->prepare("
         INSERT INTO tbl_detail_production_planning
         (pp_id, jam, qty, status)
@@ -55,71 +43,97 @@ try {
         (:pp_id, :jam, :qty, 'planned')
     ");
 
+    $insertMaterial = $pdo->prepare("
+        INSERT INTO tbl_pp_material
+        (pp_id, part_id, part_code, type)
+        VALUES
+        (:pp_id, :part_id, :part_code, :type)
+    ");
+
     $hasData = false;
 
-    // ================================
-    // LOOP SHIFT → PRODUCT
-    // ================================
-    foreach ($productCodes as $shiftNo => $products) {
+    // ================= LOOP SHIFT =================
+    foreach ($productCodes as $shiftId => $lineData) {
 
-        foreach ($products as $pIndex => $productCode) {
+        foreach ($lineData as $lineId => $products) {
 
-            $productCode = sanitize($productCode);
-            if ($productCode === '') continue;
+            foreach ($products as $index => $productCode) {
 
-            $totalQty = 0;
+                $productCode = sanitize($productCode);
+                if (!$productCode) continue;
 
-            foreach ($qtys[$shiftNo][$pIndex] as $q) {
-                $totalQty += (int)$q;
-            }
+                // ================= TOTAL QTY =================
+                $totalQty = 0;
 
-            // skip product yg semua qty = 0
-            if ($totalQty <= 0) continue;
+                foreach ($qtys[$shiftId][$lineId][$index] ?? [] as $q) {
+                    $totalQty += (int)$q;
+                }
 
-            $hasData = true;
+                if ($totalQty <= 0) continue;
 
-            // ================================
-            // INSERT HEADER
-            // ================================
-            $insertPP->execute([
-                ':pp_code' => $ppCode,
-                ':line_id' => $lineId,
-                ':product_code' => $productCode,
-                ':shift' => $shiftNo,
-                ':production_date' => $productionDate,
-                ':qty' => $totalQty,
-                ':total_qty' => $totalQty
-            ]);
+                $hasData = true;
 
-            $ppId = $pdo->lastInsertId();
-
-            // ================================
-            // INSERT DETAIL JAM + OT
-            // ================================
-            foreach ($qtys[$shiftNo][$pIndex] as $jIndex => $qty) {
-
-                $qty = (int)$qty;
-                $jam = sanitize($jams[$shiftNo][$pIndex][$jIndex] ?? '');
-
-                if ($jam === '') continue;
-
-                $insertDetail->execute([
-                    ':pp_id' => $ppId,
-                    ':jam' => $jam,   // bisa jam biasa / OT
-                    ':qty' => $qty
+                // ================= INSERT HEADER =================
+                $insertPP->execute([
+                    ':pp_code' => $ppCode,
+                    ':line_id' => $lineId,
+                    ':product_code' => $productCode,
+                    ':shift' => $shiftId,
+                    ':production_date' => $productionDate,
+                    ':qty' => $totalQty,
+                    ':total_qty' => $totalQty
                 ]);
+
+                $ppId = $pdo->lastInsertId();
+
+                // ================= INSERT DETAIL =================
+                foreach ($qtys[$shiftId][$lineId][$index] as $jam => $qty) {
+
+                    $insertDetail->execute([
+                        ':pp_id' => $ppId,
+                        ':jam' => $jam,
+                        ':qty' => (int)$qty
+                    ]);
+                }
+
+                // ================= INSERT MATERIAL =================
+                $selectedParts = $materials[$shiftId][$lineId][$index] ?? [];
+
+                if (!empty($selectedParts)) {
+
+                    // ambil info part
+                    $in = implode(',', array_fill(0, count($selectedParts), '?'));
+
+                    $stmt = $pdo->prepare("
+                        SELECT pa.part_id, pa.part_code, pa.remark
+                        FROM tbl_part_assy pa
+                        WHERE pa.part_id IN ($in)
+                    ");
+
+                    $stmt->execute($selectedParts);
+                    $parts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+                    foreach ($parts as $p) {
+
+                        $insertMaterial->execute([
+                            ':pp_id' => $ppId,
+                            ':part_id' => $p['part_id'],
+                            ':part_code' => $p['part_code'],
+                            ':type' => $p['remark'] == 0 ? 'MAIN' : 'SUB'
+                        ]);
+                    }
+                }
             }
         }
     }
 
     if (!$hasData) {
-        setAlert('error', 'Oops!', 'Semua qty bernilai 0.', 'danger', 'Coba Lagi');
-        redirect('pages/production_planning/create.php');
+        throw new Exception('Semua qty 0');
     }
 
     $pdo->commit();
 
-    setAlert('success', 'Berhasil!', 'Production planning berhasil disimpan.', 'success', 'OK');
+    setAlert('success', 'Berhasil', 'Production planning tersimpan', 'success', 'OK');
     redirect('pages/production_planning/');
 } catch (Exception $e) {
 

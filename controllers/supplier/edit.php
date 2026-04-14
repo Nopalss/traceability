@@ -10,6 +10,16 @@ $response = [
     'message' => 'Invalid request'
 ];
 
+/* =============================
+   NORMALIZE FUNCTION (CONSISTENT)
+============================= */
+function normalize($str)
+{
+    $str = strtolower(trim($str));
+    $str = preg_replace('/[^a-z0-9]/', '', $str);
+    return $str;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
@@ -30,7 +40,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Data tidak lengkap.');
         }
 
-        // Pastikan supplier ada
+        // VALIDASI: minimal harus ada huruf
+        if (!preg_match('/[a-zA-Z]/', $name_supplier)) {
+            throw new Exception('Nama supplier tidak valid.');
+        }
+
+        $normalized_input = normalize($name_supplier);
+
+        /* =============================
+           CEK EXIST
+        ============================= */
         $checkExist = $pdo->prepare("
             SELECT id_supplier 
             FROM tbl_supplier
@@ -46,21 +65,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Supplier tidak ditemukan.');
         }
 
-        // Cek duplicate (supplier saja)
-        $check = $pdo->prepare("
-            SELECT id_supplier
-            FROM tbl_supplier
-            WHERE LOWER(name_supplier) = LOWER(:name)
-            AND status = 'supplier'
-            AND id_supplier != :id
-        ");
+        /* =============================
+           AMBIL SEMUA SUPPLIER (BIAR CONSISTENT)
+        ============================= */
+        $dbSuppliers = $pdo->query("
+            SELECT id_supplier, name_supplier 
+            FROM tbl_supplier 
+            WHERE status='supplier'
+        ")->fetchAll(PDO::FETCH_ASSOC);
 
-        $check->execute([
-            ':name' => $name_supplier,
-            ':id'   => $id_supplier
-        ]);
+        $dbNormalized = [];
 
-        if ($check->fetch()) {
+        foreach ($dbSuppliers as $row) {
+            if ($row['id_supplier'] == $id_supplier) continue;
+
+            $norm = normalize($row['name_supplier']);
+            $dbNormalized[$norm] = true;
+        }
+
+        /* =============================
+           CEK DUPLICATE (STRONG)
+        ============================= */
+        if (isset($dbNormalized[$normalized_input])) {
             throw new Exception('Nama supplier sudah digunakan.');
         }
 

@@ -10,11 +10,21 @@ $response = [
     'message' => 'Invalid request'
 ];
 
+/* =============================
+   NORMALIZE (CONSISTENT)
+============================= */
+function normalize($str)
+{
+    $str = strtolower(trim($str));
+    $str = preg_replace('/[^a-z0-9]/', '', $str);
+    return $str;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     try {
 
-        // Ambil JSON dari request
+        // Ambil JSON
         $raw = file_get_contents('php://input');
         $data = json_decode($raw, true);
 
@@ -22,33 +32,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new Exception('Data tidak valid.');
         }
 
-        // Ambil dan bersihkan input
+        // FIX: field name
         $name_customer = trim(sanitize($data['name_Customer'] ?? ''));
 
         if ($name_customer === '') {
             throw new Exception('Nama customer wajib diisi.');
         }
 
-        // Cek duplicate customer
-        $check = $pdo->prepare("
-            SELECT id_supplier 
+        // VALIDASI: harus ada huruf
+        if (!preg_match('/[a-zA-Z]/', $name_customer)) {
+            throw new Exception('Nama customer tidak valid.');
+        }
+
+        $normalized_input = normalize($name_customer);
+
+        /* =============================
+           LOAD DB (CONSISTENT)
+        ============================= */
+        $dbCustomers = $pdo->query("
+            SELECT name_supplier 
             FROM tbl_supplier 
-            WHERE LOWER(name_supplier) = LOWER(:name)
-            AND status = 'customer'
-        ");
+            WHERE status='customer'
+        ")->fetchAll(PDO::FETCH_COLUMN);
 
-        $check->execute([
-            ':name' => $name_customer
-        ]);
+        $dbNormalized = [];
+        foreach ($dbCustomers as $c) {
+            $dbNormalized[normalize($c)] = true;
+        }
 
-        if ($check->fetch()) {
+        /* =============================
+           CEK DUPLICATE (STRONG)
+        ============================= */
+        if (isset($dbNormalized[$normalized_input])) {
             throw new Exception('Customer sudah ada.');
         }
 
-        // Mulai transaction
         $pdo->beginTransaction();
 
-        // Insert customer
         $stmt = $pdo->prepare("
             INSERT INTO tbl_supplier (name_supplier, created_by, status)
             VALUES (:name, :created_by, 'customer')
@@ -59,7 +79,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ':created_by' => $_SESSION['username'] ?? 'system'
         ]);
 
-        // Commit
         $pdo->commit();
 
         $response['success'] = true;

@@ -12,7 +12,7 @@ $pagination = $_POST['pagination'] ?? [];
 $keyword = trim($query['part_code'] ?? '');
 
 $page   = max(1, (int)($pagination['page'] ?? 1));
-$limit  = max(1, (int)($pagination['perpage'] ?? 10));
+$limit  = max(1, (int)($pagination['perpage'] ?? 100));
 $offset = ($page - 1) * $limit;
 
 /* ================================

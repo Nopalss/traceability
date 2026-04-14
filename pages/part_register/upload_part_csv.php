@@ -5,28 +5,19 @@ require_once __DIR__ . '/../../includes/config.php';
 header('Content-Type: application/json');
 
 if (!isset($_POST['parts'])) {
-    echo json_encode([
-        "status" => "error"
-    ]);
+    echo json_encode(["status" => "error"]);
     exit;
 }
 
 $parts = $_POST['parts'];
 
 /* =============================
-   NORMALIZE FUNCTION (GLOBAL)
+   NORMALIZE (optional, masih dipakai buat clean name)
 ============================= */
 function normalize($str)
 {
-    $str = trim($str);
-    $str = strtoupper($str);
-
-    // hapus simbol yang bikin beda format
-    $str = str_replace([',', '.'], '', $str);
-
-    // rapihin spasi
-    $str = preg_replace('/\s+/', ' ', $str);
-
+    $str = strtoupper(trim($str));
+    $str = preg_replace('/[^A-Z0-9]/', '', $str);
     return $str;
 }
 
@@ -34,27 +25,35 @@ function normalize($str)
    PREPARE INSERT
 ============================= */
 $insert = $pdo->prepare("
-INSERT INTO tbl_part
-(part_code, part_name, supplier)
+INSERT INTO tbl_part (part_code, part_name, supplier)
 VALUES (?,?,?)
 ");
 
 /* =============================
-   LOAD DATA DB (1x ONLY)
+   LOAD DB (COMPOSITE KEY)
 ============================= */
 $dbParts = $pdo->query("
-    SELECT part_code, part_name 
+    SELECT part_code, supplier 
     FROM tbl_part
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-/* normalize DB */
-$dbCodes = [];
-$dbNames = [];
+$dbKeys = [];
 
 foreach ($dbParts as $row) {
-    $dbCodes[] = strtoupper(trim($row['part_code']));
-    $dbNames[] = normalize($row['part_name']);
+    $key = strtoupper(trim($row['part_code'])) . '|' . $row['supplier'];
+    $dbKeys[$key] = true;
 }
+
+/* =============================
+   LOAD SUPPLIER VALID
+============================= */
+$dbSuppliers = $pdo->query("
+    SELECT id_supplier 
+    FROM tbl_supplier 
+    WHERE status='supplier'
+")->fetchAll(PDO::FETCH_COLUMN);
+
+$validSuppliers = array_flip($dbSuppliers);
 
 /* =============================
    COUNTER
@@ -62,87 +61,88 @@ foreach ($dbParts as $row) {
 $inserted = 0;
 $rejected = 0;
 
-$processedCodes = [];
-$processedNames = [];
+$processedKeys = [];
 
-/* =============================
-   LOOP INPUT
-============================= */
-foreach ($parts as $p) {
+try {
 
-    // =============================
-    // NORMALIZE INPUT
-    // =============================
+    $pdo->beginTransaction();
 
-    $code = strtoupper(trim($p['part_code']));
-    $name_original = trim($p['part_name']);
-    $name = normalize($name_original);
+    foreach ($parts as $p) {
 
-    $supplier = $p['supplier'];
+        $code = strtoupper(trim($p['part_code']));
+        $name_original = trim($p['part_name']);
+        $supplier = $p['supplier'];
 
-    // =============================
-    // VALIDASI KOSONG
-    // =============================
+        $key = $code . '|' . $supplier;
 
-    if ($code === '' || $name === '') {
-        $rejected++;
-        continue;
+        // =============================
+        // VALIDASI
+        // =============================
+
+        if ($code === '' || $name_original === '') {
+            $rejected++;
+            continue;
+        }
+
+        // hanya numeric
+        if (!preg_match('/^[0-9]+$/', $code)) {
+            $rejected++;
+            continue;
+        }
+
+        // supplier valid
+        if (!isset($validSuppliers[$supplier])) {
+            $rejected++;
+            continue;
+        }
+
+        // =============================
+        // DUPLICATE CSV (by code + supplier)
+        // =============================
+
+        if (isset($processedKeys[$key])) {
+            $rejected++;
+            continue;
+        }
+
+        // =============================
+        // DUPLICATE DB (by code + supplier)
+        // =============================
+
+        if (isset($dbKeys[$key])) {
+            $rejected++;
+            continue;
+        }
+
+        // =============================
+        // INSERT
+        // =============================
+
+        $insert->execute([
+            $code,
+            strtoupper($name_original),
+            $supplier
+        ]);
+
+        // update cache
+        $processedKeys[$key] = true;
+        $dbKeys[$key] = true;
+
+        $inserted++;
     }
 
-    // =============================
-    // DUPLICATE CSV (CODE)
-    // =============================
+    $pdo->commit();
+} catch (Exception $e) {
 
-    if (in_array($code, $processedCodes)) {
-        $rejected++;
-        continue;
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
     }
 
-    // =============================
-    // DUPLICATE CSV (NAME)
-    // =============================
-
-    if (in_array($name, $processedNames)) {
-        $rejected++;
-        continue;
-    }
-
-    // =============================
-    // DUPLICATE DB (CODE)
-    // =============================
-
-    if (in_array($code, $dbCodes)) {
-        $rejected++;
-        continue;
-    }
-
-    // =============================
-    // DUPLICATE DB (NAME)
-    // =============================
-
-    if (in_array($name, $dbNames)) {
-        $rejected++;
-        continue;
-    }
-
-    // =============================
-    // INSERT
-    // =============================
-
-    $insert->execute([
-        $code,
-        $name_original, // simpan original biar rapih di UI
-        $supplier
+    echo json_encode([
+        "status" => "error",
+        "message" => $e->getMessage()
     ]);
-
-    // update cache
-    $processedCodes[] = $code;
-    $processedNames[] = $name;
-
-    $dbCodes[] = $code;
-    $dbNames[] = $name;
-
-    $inserted++;
+    exit;
 }
 
 /* =============================
