@@ -22,7 +22,7 @@ if (!$model) {
 $assyCode = $model['part_code'];
 
 /* =========================
-   GET BOM DETAIL (UPDATED)
+   GET BOM + SUBS
 ========================= */
 $stmt = $pdo->prepare("
 SELECT 
@@ -30,6 +30,7 @@ SELECT
     pa.qty,
     pa.unit,
     pa.remark,
+    pa.subs,
     p.part_name,
     s.name_supplier
 FROM tbl_part_assy pa
@@ -100,6 +101,7 @@ require __DIR__ . '/../../includes/navbar.php';
                         <th>Unit</th>
                         <th>Supplier</th>
                         <th>Remark</th>
+                        <th>Subs</th>
                         <th>Status</th>
                         <th>Action</th>
                     </tr>
@@ -121,50 +123,58 @@ require __DIR__ . '/../../includes/navbar.php';
     const parts = <?= json_encode($parts); ?>;
     const bom = <?= json_encode($bom); ?>;
 
-    /* ======================
-       DUPLICATE CONTROL
-    ====================== */
-    function getSelectedParts() {
-        let arr = [];
-        document.querySelectorAll('.part-select').forEach(s => {
-            if (s.value) arr.push(s.value);
+    /* ====================== */
+    function fillSubsOptions() {
+        let options = '<option value="">-</option>';
+        parts.forEach(p => {
+            options += `<option value="${p.part_code}__${p.name_supplier}">
+        ${p.part_code} - ${p.part_name} - ${p.name_supplier}</option>`;
         });
-        return arr;
-    }
 
-    function refreshPartOptions() {
-        const used = getSelectedParts();
-
-        document.querySelectorAll('.part-select').forEach(select => {
-            [...select.options].forEach(opt => {
-                if (!opt.value) return;
-
-                let disabled = used.includes(opt.value) && opt.value !== select.value;
-                opt.disabled = disabled;
-
-                opt.textContent = (disabled ? '❌ ' : '') + opt.dataset.label;
-                opt.style.color = disabled ? '#dc3545' : '';
-            });
+        document.querySelectorAll('.subs').forEach(s => {
+            let val = s.value;
+            s.innerHTML = options;
+            if (val) s.value = val;
         });
     }
 
-    /* ======================
-       RENDER ROW
-    ====================== */
-    function renderRow(i, row = null) {
+    /* ====================== */
+    function autoSetSubs() {
+        let lastMain = null;
+
+        $("#tableBody tr").each(function() {
+
+            let remark = $(this).find(".remark").val();
+            let partVal = $(this).find(".part-select").val();
+            let subs = $(this).find(".subs");
+
+            if (!partVal) return;
+
+            if (remark == 0) {
+                lastMain = partVal;
+                subs.val('');
+                subs.prop("disabled", true);
+            } else {
+                if (lastMain) {
+                    subs.val(lastMain);
+                    subs.prop("disabled", false);
+                }
+            }
+        });
+    }
+
+    /* ====================== */
+    function renderRow(row = null) {
 
         let options = '<option value="">Select</option>';
 
         parts.forEach(p => {
-            let val = p.part_code + '__' + p.name_supplier;
+            let val = p.part_code + "__" + p.name_supplier;
 
-            options += `<option 
-            value="${val}"
-            ${row && row.part_code === p.part_code && row.name_supplier === p.name_supplier ? 'selected' : ''}
-            data-label="${p.part_code} - ${p.part_name} - ${p.name_supplier}"
-            data-supplier="${p.name_supplier}">
-            ${p.part_code} - ${p.part_name} - ${p.name_supplier}
-        </option>`;
+            options += `<option value="${val}"
+    ${row && row.part_code==p.part_code && row.name_supplier==p.name_supplier?'selected':''}>
+    ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+    </option>`;
         });
 
         return `
@@ -172,77 +182,68 @@ require __DIR__ . '/../../includes/navbar.php';
 <td class="no"></td>
 
 <td><select class="form-control part-select">${options}</select></td>
-
-<td><input type="number" class="form-control qty" value="${row?.qty || ''}"></td>
-
-<td><input type="text" class="form-control unit" value="${row?.unit || 'Pcs'}"></td>
-
-<td class="supplier">${row?.name_supplier || '-'}</td>
+<td><input type="number" class="form-control qty" value="${row?.qty||''}"></td>
+<td><input type="text" class="form-control unit" value="${row?.unit||'Pcs'}"></td>
+<td class="supplier">${row?.name_supplier||'-'}</td>
 
 <td>
 <select class="form-control remark">
-    <option value="0" ${row?.remark == 0 ? 'selected' : ''}>MAIN</option>
-    <option value="1" ${row?.remark == 1 ? 'selected' : ''}>SUBSTITUTE</option>
+<option value="0" ${row?.remark==0?'selected':''}>MAIN</option>
+<option value="1" ${row?.remark==1?'selected':''}>SUBSTITUTE</option>
 </select>
 </td>
 
-<td><span style="color:green;font-weight:bold">OK</span></td>
+<td>
+<select class="form-control subs"></select>
+</td>
 
+<td><span style="color:green">OK</span></td>
 <td><button class="btn btn-danger btn-sm del">X</button></td>
 </tr>`;
     }
 
-    /* ======================
-       INIT LOAD DATA
-    ====================== */
+    /* ====================== */
     function loadData() {
         $("#tableBody").html('');
-        bom.forEach((row, i) => {
-            $("#tableBody").append(renderRow(i, row));
+        bom.forEach(r => {
+            $("#tableBody").append(renderRow(r));
         });
+
         renumber();
-        refreshPartOptions();
+        fillSubsOptions();
+        autoSetSubs();
     }
 
-    /* ======================
-       RENUMBER
-    ====================== */
+    /* ====================== */
     function renumber() {
-        $("#tableBody tr").each(function(i) {
-            $(this).find(".no").text(i + 1);
+        $("#tableBody tr").each((i, e) => {
+            $(e).find(".no").text(i + 1);
         });
     }
 
-    /* ======================
-       EVENTS
-    ====================== */
-    $("#btnAddRow").click(function() {
+    /* ====================== EVENTS */
+    $("#btnAddRow").click(() => {
         $("#tableBody").append(renderRow());
         renumber();
-        refreshPartOptions();
+        fillSubsOptions();
+        autoSetSubs();
     });
 
+    $(document).on("change", ".remark", autoSetSubs);
+
     $(document).on("change", ".part-select", function() {
-
-        let selected = $(this).find(":selected");
-        let supplier = selected.data("supplier") || '-';
-
-        let row = $(this).closest("tr");
-
-        row.find(".supplier").text(supplier);
-
-        refreshPartOptions();
+        let s = $(this).find(":selected").text();
+        $(this).closest("tr").find(".supplier").text(s.split('-').pop());
+        autoSetSubs();
     });
 
     $(document).on("click", ".del", function() {
         $(this).closest("tr").remove();
         renumber();
-        refreshPartOptions();
+        autoSetSubs();
     });
 
-    /* ======================
-       UPDATE SAVE
-    ====================== */
+    /* ====================== SAVE */
     $("#btnSave").click(function() {
 
         let data = [];
@@ -256,13 +257,21 @@ require __DIR__ . '/../../includes/navbar.php';
             let qty = $(this).find(".qty").val();
             let unit = $(this).find(".unit").val();
             let remark = $(this).find(".remark").val();
+            let subs = $(this).find(".subs").val() || '';
 
-            if (!part_code || !qty) return;
+            if (remark == 1 && !subs) {
+                Swal.fire("Error", "SUBSTITUTE harus punya parent", "error");
+                return false;
+            }
 
-            let key = part_code + '__' + supplier;
+            if (subs === val) {
+                Swal.fire("Error", "Part tidak boleh jadi dirinya sendiri", "error");
+                return false;
+            }
 
+            let key = part_code + "__" + supplier;
             if (used.has(key)) {
-                Swal.fire("Error", "Duplicate part tidak boleh!", "error");
+                Swal.fire("Error", "Duplicate part!", "error");
                 return false;
             }
 
@@ -273,7 +282,8 @@ require __DIR__ . '/../../includes/navbar.php';
                 qty,
                 unit,
                 remark,
-                supplier
+                supplier,
+                subs
             });
         });
 
@@ -283,15 +293,12 @@ require __DIR__ . '/../../includes/navbar.php';
             assy_code: $("#assyCode").val(),
             assy_name: $("#assyName").val(),
             items: JSON.stringify(data)
-        }, function(res) {
-
-            if (res.status === 'success') {
-                Swal.fire("Success", "Berhasil update!", "success")
-                    .then(() => location.reload());
+        }, res => {
+            if (res.status == 'success') {
+                Swal.fire("Success", "Updated", "success").then(() => location.reload());
             } else {
                 Swal.fire("Error", res.msg, "error");
             }
-
         }, 'json');
 
     });

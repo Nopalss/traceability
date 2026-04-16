@@ -208,15 +208,13 @@ require __DIR__ . '/../../includes/footer.php';
 
         $(".customer-input").each(function() {
 
-            let name = $(this).val();
+            let name = $(this).val().trim();
             let normalized = normalize(name);
 
             if (!normalized) return;
-
-            // validasi minimal ada huruf
             if (!/[a-z]/i.test(normalized)) return;
 
-            customers.push(normalized);
+            customers.push(name); // ⬅️ KIRIM RAW, BUKAN NORMALIZED
         });
 
         // remove duplicate final

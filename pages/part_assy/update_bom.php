@@ -49,32 +49,29 @@ try {
     /* =========================
        3. UPDATE tbl_model
     ========================== */
-    $stmt = $pdo->prepare("
+    $pdo->prepare("
         UPDATE tbl_model 
         SET name = ?, part_code = ?
         WHERE id = ?
-    ");
-    $stmt->execute([$model, $newAssy, $id]);
+    ")->execute([$model, $newAssy, $id]);
 
     /* =========================
        4. UPDATE tbl_part (assy)
     ========================== */
-    $stmt = $pdo->prepare("
+    $pdo->prepare("
         UPDATE tbl_part 
         SET part_code = ?, part_name = ?
         WHERE part_code = ?
-    ");
-    $stmt->execute([$newAssy, $assyName, $oldAssy]);
+    ")->execute([$newAssy, $assyName, $oldAssy]);
 
     /* =========================
        5. UPDATE RELASI BOM
     ========================== */
-    $stmt = $pdo->prepare("
+    $pdo->prepare("
         UPDATE tbl_part_assy 
         SET part_assy = ?
         WHERE part_assy = ?
-    ");
-    $stmt->execute([$newAssy, $oldAssy]);
+    ")->execute([$newAssy, $oldAssy]);
 
     /* =========================
        6. DELETE OLD BOM
@@ -102,22 +99,23 @@ try {
 
     $insert = $pdo->prepare("
         INSERT INTO tbl_part_assy 
-        (part_assy, part_code, qty, unit, remark, part_id)
-        VALUES (?, ?, ?, ?, ?, ?)
+        (part_assy, part_code, qty, unit, remark, part_id, subs)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
     ");
 
     /* =========================
-       7. INSERT NEW BOM
+       INSERT NEW BOM
     ========================== */
     $used = [];
 
     foreach ($items as $i) {
 
-        $part_code = trim($i['part_code'] ?? '');
-        $qty       = (int)($i['qty'] ?? 0);
-        $unit      = trim($i['unit'] ?? 'Pcs');
-        $remark    = (int)($i['remark'] ?? 0);
+        $part_code     = trim($i['part_code'] ?? '');
+        $qty           = (int)($i['qty'] ?? 0);
+        $unit          = trim($i['unit'] ?? 'Pcs');
+        $remark        = (int)($i['remark'] ?? 0);
         $supplier_name = trim($i['supplier'] ?? '');
+        $subs_val      = trim($i['subs'] ?? '');
 
         if (!$part_code) {
             throw new Exception("Ada part kosong");
@@ -131,7 +129,7 @@ try {
             throw new Exception("Qty tidak valid di part: $part_code");
         }
 
-        // 🔥 DUPLICATE CHECK (part + supplier)
+        // 🔥 DUPLICATE CHECK
         $key = $part_code . '__' . $supplier_name;
 
         if (in_array($key, $used)) {
@@ -168,6 +166,53 @@ try {
         }
 
         /* =========================
+           HANDLE SUBS (FIX TOTAL)
+        ========================== */
+        $subs_id = 0;
+
+        if ($remark == 1) {
+
+            if (!$subs_val) {
+                throw new Exception("SUBSTITUTE harus punya parent");
+            }
+
+            // 🔥 EXPLODE (INI WAJIB)
+            if (strpos($subs_val, '__') === false) {
+                throw new Exception("Format subs salah");
+            }
+
+            list($subs_code, $subs_supplier_name) = explode("__", $subs_val);
+
+            // 🔥 GET SUPPLIER PARENT
+            $getSupplier->execute([
+                'name' => $subs_supplier_name
+            ]);
+
+            $subs_supplier_id = $getSupplier->fetchColumn();
+
+            if (!$subs_supplier_id) {
+                throw new Exception("Supplier subs tidak ditemukan: $subs_supplier_name");
+            }
+
+            // 🔥 GET PART PARENT
+            $getPart->execute([
+                'code' => $subs_code,
+                'supplier' => $subs_supplier_id
+            ]);
+
+            $subs_id = $getPart->fetchColumn();
+
+            if (!$subs_id) {
+                throw new Exception("Subs tidak ditemukan: $subs_code - $subs_supplier_name");
+            }
+
+            // 🔥 VALIDASI SELF (FULL IDENTITY)
+            if ($subs_id == $part_id) {
+                throw new Exception("Part tidak boleh menjadi substitute dirinya sendiri");
+            }
+        }
+
+        /* =========================
            INSERT
         ========================== */
         $insert->execute([
@@ -176,7 +221,8 @@ try {
             $qty,
             $unit,
             $remark,
-            $part_id
+            $part_id,
+            $subs_id
         ]);
     }
 

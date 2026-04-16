@@ -101,13 +101,13 @@ try {
 
                 if (!empty($selectedParts)) {
 
-                    // ambil info part
+                    // 🔥 FIX: pakai id_pa bukan part_id
                     $in = implode(',', array_fill(0, count($selectedParts), '?'));
 
                     $stmt = $pdo->prepare("
-                        SELECT pa.part_id, pa.part_code, pa.remark
+                        SELECT pa.id_pa, pa.part_id, pa.part_code, pa.remark
                         FROM tbl_part_assy pa
-                        WHERE pa.part_id IN ($in)
+                        WHERE pa.id_pa IN ($in)
                     ");
 
                     $stmt->execute($selectedParts);
@@ -117,7 +117,7 @@ try {
 
                         $insertMaterial->execute([
                             ':pp_id' => $ppId,
-                            ':part_id' => $p['part_id'],
+                            ':part_id' => $p['part_id'], // tetap part_id untuk relasi ke part
                             ':part_code' => $p['part_code'],
                             ':type' => $p['remark'] == 0 ? 'MAIN' : 'SUB'
                         ]);

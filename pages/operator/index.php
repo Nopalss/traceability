@@ -1171,7 +1171,6 @@ function jamLabel($jam)
             parts: parts,
             line: lineId,
             shift: activeShift,
-            ng_type: $('#ngType').val()
 
         }, function(res) {
 
@@ -1225,31 +1224,41 @@ function jamLabel($jam)
                 rows += `
 <tr
 data-part="${p.part_code}"
-data-ref="${p.ref_number}"
 data-lot="${p.lot_no}"
+data-ref="${p.ref_number}"
+data-part-id="${p.part_id}"
 >
 
 <td>
 <input type="checkbox"
 class="chkPart"
-data-index="${i}">
+data-index="${i}"
+checked>
 </td>
 
 <td>${p.part_code}</td>
 <td>${p.part_name}</td>
 <td>${p.lot_no}</td>
+<td>${p.ref_number}</td>
 <td>${p.used_qty}</td>
 
-                <td>
-                    <input type="number"
-                    class="ngQty form-control form-control-sm"
-                    min="0"
-                    max="${p.used_qty}"
-                    value="0"
-                    data-index="${i}">
-                </td>
+<td>
+<input type="number"
+class="ngQty form-control form-control-sm"
+min="0"
+max="${p.used_qty}"
+value="${p.used_qty}"
+data-index="${i}">
+</td>
 
-            </tr>`
+<td>
+<select class="ngTypeRow form-control form-control-sm"
+data-index="${i}">
+</select>
+</td>
+
+</tr>
+`
             })
 
             Swal.fire({
@@ -1263,14 +1272,7 @@ data-index="${i}">
 
                 NG TYPE
 
-                <select id="ngType"
-                class="form-control form-control-sm">
-
-                    <option value="MECA">MECA</option>
-                    <option value="QC">QC</option>
-                    <option value="VISUAL">VISUAL</option>
-
-                </select>
+               
 
             </div>
 
@@ -1322,11 +1324,14 @@ data-index="${i}">
 
                         if (qty > 0) {
 
+                            let ngType = row.find('.ngTypeRow').val()
+
                             parts.push({
                                 part_code: part,
                                 lot_no: lot,
                                 ref_number: ref,
-                                ng_qty: qty
+                                ng_qty: qty,
+                                ng_type: ngType
                             })
 
                         }
@@ -1355,6 +1360,39 @@ data-index="${i}">
 
             })
 
+            // ==============================
+            // 🔥 NAH INI DIA YANG LU TANYA
+            // ==============================
+
+            setTimeout(() => {
+
+                $('.ngTypeRow').each(function() {
+
+                    let row = $(this).closest('tr')
+                    let partId = row.data('part-id')
+                    let select = $(this)
+
+                    $.get('ajax_operator.php', {
+                        action: 'get_ng_by_part',
+                        part_id: partId
+                    }, function(res) {
+
+                        let list = JSON.parse(res)
+                        let html = ''
+
+                        list.forEach(n => {
+                            html += `<option value="${n.id}">
+                            ${n.ng_name}
+                         </option>`
+                        })
+
+                        select.html(html)
+
+                    })
+
+                })
+
+            }, 100)
             $('#checkAll').click(function() {
 
                 let c = this.checked
@@ -1395,7 +1433,6 @@ data-index="${i}">
             parts: parts,
             line: lineId,
             shift: activeShift,
-            ng_type: $('#ngType').val()
 
         }, function(res) {
 
@@ -1545,7 +1582,7 @@ data-index="${i}">
             let html = ''
 
             data.forEach(n => {
-                html += `<option value="${n.ng_code}">
+                html += `<option value="${n.id}">
                         ${n.ng_name}
                      </option>`
             })
@@ -1580,6 +1617,7 @@ data-index="${i}">
 data-part="${p.part_code}"
 data-lot="${p.lot_no}"
 data-ref="${p.ref_number}"
+data-part-id="${p.part_id}"
 >
 
 <td>
@@ -1604,13 +1642,17 @@ value="${p.used_qty}"
 data-index="${i}">
 </td>
 
+<td>
+<select class="ngTypeRow"></select>
+</td>
+
 </tr>
 `
             })
 
             Swal.fire({
 
-                title: 'EXIT MECA (BOX)',
+                title: 'EXIT MECA',
 
                 width: 900,
 
@@ -1620,9 +1662,7 @@ data-index="${i}">
 
                 NG TYPE
 
-               <select id="ngType"
-class="form-control form-control-sm">
-</select>
+             
             </div>
             <table class="table table-sm table-bordered">
 
@@ -1641,6 +1681,7 @@ class="form-control form-control-sm">
                         <th>REF</th>
                         <th>USED</th>
                         <th>NG QTY</th>
+                        <th>NG</th>
 
                     </tr>
 
@@ -1675,11 +1716,14 @@ class="form-control form-control-sm">
 
                         if (qty > 0) {
 
+                            let ngType = row.find('.ngTypeRow').val()
+
                             parts.push({
                                 part_code: part,
                                 lot_no: lot,
                                 ref_number: ref,
-                                ng_qty: qty
+                                ng_qty: qty,
+                                ng_type: ngType // 🔥 WAJIB
                             })
 
                         }
@@ -1708,10 +1752,36 @@ class="form-control form-control-sm">
                 sendExitBox(barcode, parts)
 
             })
-            loadNgType(function(opt) {
-                $('#ngType').html(opt)
-            })
 
+            setTimeout(() => {
+
+                $('.ngTypeRow').each(function() {
+
+                    let row = $(this).closest('tr')
+                    let partId = row.data('part-id')
+                    let select = $(this)
+
+                    $.get('ajax_operator.php', {
+                        action: 'get_ng_by_part',
+                        part_id: partId
+                    }, function(res) {
+
+                        let list = JSON.parse(res)
+                        let html = ''
+
+                        list.forEach(n => {
+                            html += `<option value="${n.id}">
+                            ${n.ng_name}
+                         </option>`
+                        })
+
+                        select.html(html)
+
+                    })
+
+                })
+
+            }, 100)
             $('#checkAll').prop('checked', true)
 
             /* SELECT ALL */
@@ -2062,38 +2132,49 @@ class="swal2-input">
         let lot = $(this).data('lot')
         let remain = $(this).data('remain')
         let ref = $(this).data('ref')
+        let partId = $(this).data('part-id');
 
         Swal.fire({
 
             title: 'Material NG',
 
             html: `
+            <input id="ngQty"
+            type="number"
+            class="swal2-input"
+            placeholder="NG Qty">
 
-<input id="ngQty"
-type="number"
-class="swal2-input"
-placeholder="NG Qty">
-
-<select id="ngReason"
-class="swal2-input">
-
-<?php foreach ($ngMaster as $ng): ?>
-    <option value="<?= $ng['ng_code'] ?>"><?= $ng['ng_code'] ?></option>
-    <?php endforeach; ?>
-
-</select>
-
-`,
+            <select id="ngReason" class="swal2-input"></select>
+        `,
 
             confirmButtonText: 'SUBMIT',
+
+            onOpen: () => {
+
+                // 🔥 LOAD NG TYPE DI SINI (BENER)
+                $.get('ajax_operator.php', {
+                    action: 'get_ng_by_part',
+                    part_id: partId
+                }, function(res) {
+
+                    let list = JSON.parse(res);
+                    let html = '';
+
+                    list.forEach(n => {
+                        html += `<option value="${n.id}">${n.ng_name}</option>`;
+                    });
+
+                    $('#ngReason').html(html);
+
+                });
+
+            },
 
             preConfirm: () => {
 
                 return {
-
                     qty: $('#ngQty').val(),
                     reason: $('#ngReason').val()
-
                 }
 
             }
@@ -2124,7 +2205,6 @@ class="swal2-input">
         })
 
     })
-
     setInterval(function() {
 
         if (!$('.swal2-container:visible').length) {

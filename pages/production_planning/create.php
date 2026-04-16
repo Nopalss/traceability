@@ -55,7 +55,7 @@ require __DIR__ . '/../../includes/navbar.php';
         <div class="card card-modern">
             <div class="card-body">
 
-                <h3 class="mb-4">🚀 Production Planning (Smart Mode)</h3>
+                <h3 class="mb-4">Production Planning</h3>
 
                 <form method="post" action="<?= BASE_URL ?>controllers/production_planning/create.php">
 
@@ -349,7 +349,7 @@ ${ot>0?'<span style="color:red">(Overtime)</span>':''}
 <td>
 <input type="checkbox"
 name="material[${shiftId}][${lineId}][${index}][]"
-value="${r.part_id}"
+value="${r.id_pa}"
 ${r.remark==0 && r.stock > 0?'checked':''}
 >
 </td>

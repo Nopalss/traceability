@@ -1,123 +1,94 @@
 <?php
 require_once __DIR__ . '/../../includes/config.php';
 
-$_SESSION['menu'] = 'ng_type';
-$_SESSION['table'] = 'ng_type';
-$_SESSION['halaman'] = 'NG Type';
-$_SESSION['subHalaman'] = '';
-
 require __DIR__ . '/../../includes/header.php';
-require __DIR__ . '/../../includes/clear_temp_session.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
+
+$parts = $pdo->query("SELECT id_part, part_code, part_name FROM tbl_part ORDER BY part_code ASC")->fetchAll();
 ?>
 
-<div class="content d-flex flex-column flex-column-fluid" id="kt_content">
-    <div class="d-flex flex-column-fluid">
-        <div class="container">
+<div class="content">
+    <div class="container">
 
-            <div class="card card-custom">
-                <div class="card-header flex-wrap border-0 pt-6 pb-0">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex justify-content-between">
+                <h4>NG Type</h4>
+                <button class="btn btn-primary" id="addNgBtn">+ Add</button>
+            </div>
 
-                    <div class="card-title">
-                        <h3 class="card-label">NG Type</h3>
-                    </div>
+            <div class="card-body">
 
-                    <div class="card-toolbar">
-                        <button class="btn btn-primary font-weight-bolder" id="addNgBtn">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>NG</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
 
-                            <span class="svg-icon svg-icon-md">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24">
-                                    <circle fill="#000" opacity="0.3" cx="12" cy="12" r="10" />
-                                    <path d="M11 7h2v10h-2zM7 11h10v2H7z" fill="#000" />
-                                </svg>
-                            </span>
-
-                            Add NG Type
-
-                        </button>
-                    </div>
-
-                </div>
-
-                <div class="card-body">
-
-                    <table class="table table-bordered table-hover" id="ngTable">
-
-                        <thead class="thead-light">
-
-                            <tr>
-                                <th width="60">ID</th>
-                                <th width="200">NG TITLE</th>
-                                <th>NG DESCRIPTION</th>
-                                <th width="120">STATUS</th>
-                                <th width="150">ACTION</th>
-                            </tr>
-
-                        </thead>
-
-                        <tbody>
-
-                            <?php
-
-                            $q = $pdo->query("SELECT * FROM tbl_ng_type");
-
-                            foreach ($q as $r) {
-
-                                $statusColor = $r['status'] == 'ACTIVE' ? 'success' : 'secondary';
-
-                                echo "
-
+                    <tbody>
+                        <?php
+                        $q = $pdo->query("SELECT * FROM tbl_ng_type");
+                        foreach ($q as $r) {
+                            echo "
 <tr>
-
 <td>{$r['id']}</td>
-
+<td><b>{$r['ng_code']}</b><br><small>{$r['ng_name']}</small></td>
+<td>{$r['status']}</td>
 <td>
-<strong>{$r['ng_code']}</strong>
-</td>
-
-<td style='white-space:pre-line'>
-{$r['ng_name']}
-</td>
-
-<td>
-<span class='badge badge-$statusColor'>
-{$r['status']}
-</span>
-</td>
-
-<td>
-
-<button class='btn btn-sm btn-warning editNg'
+<button class='btn btn-warning btn-sm editNg'
 data-id='{$r['id']}'
 data-code='" . htmlspecialchars($r['ng_code'], ENT_QUOTES) . "'
-data-name='" . htmlspecialchars($r['ng_name'], ENT_QUOTES) . "'
-data-status='{$r['status']}'
->
+data-status='{$r['status']}'>Edit</button>
 
-Edit
-
-</button>
-
-<button class='btn btn-sm btn-danger deleteNg'
-data-id='{$r['id']}'>
-Delete
-</button>
-
+<button class='btn btn-danger btn-sm deleteNg'
+data-id='{$r['id']}'>Delete</button>
 </td>
+</tr>";
+                        }
+                        ?>
+                    </tbody>
+                </table>
 
-</tr>
+            </div>
+        </div>
+    </div>
+</div>
 
-";
-                            }
+<!-- MODAL -->
+<div class="modal fade" id="ngModal">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
 
-                            ?>
+            <div class="modal-header">
+                <h5 class="modal-title">NG Type</h5>
+                <button class="close" data-dismiss="modal">&times;</button>
+            </div>
 
-                        </tbody>
+            <div class="modal-body">
 
-                    </table>
+                <input id="ng_code" class="form-control mb-2" placeholder="NG Title">
 
+                <select id="ng_status" class="form-control mb-3">
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">INACTIVE</option>
+                </select>
+
+                <input type="text" id="searchPart" class="form-control mb-2" placeholder="🔍 Search part...">
+
+                <div class="selected-count mb-2">
+                    Selected: <span id="countSelected">0</span>
                 </div>
+
+                <div class="part-box" id="partContainer"></div>
+
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="saveNg">Save</button>
             </div>
 
         </div>
@@ -125,179 +96,154 @@ Delete
 </div>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
+<style>
+    .part-box {
+        border: 1px solid #ddd;
+        border-radius: 10px;
+        max-height: 300px;
+        overflow: auto;
+        padding: 10px;
+        background: #fafafa;
+    }
+
+    .part-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        cursor: pointer;
+    }
+
+    .part-row:hover {
+        background: #eef3ff;
+    }
+
+    .part-row.active {
+        background: #dce8ff;
+    }
+</style>
 
 <script>
-    /* =========================
-ADD
-========================= */
+    let PARTS = <?= json_encode($parts) ?>;
+    let selectedParts = [];
+    let editId = null;
 
-    $("#addNgBtn").click(function() {
+    function renderParts() {
 
-        Swal.fire({
+        let html = '';
 
-            title: 'Add NG Type',
+        PARTS.forEach(p => {
 
-            html: `
+            let checked = selectedParts.includes(p.id_part.toString()) ? 'checked' : '';
+            let active = checked ? 'active' : '';
 
-<input id="ng_code"
-class="swal2-input"
-placeholder="NG Title">
+            html += `
+        <div class="part-row ${active}">
+            <input type="checkbox" class="part-check" value="${p.id_part}" ${checked}>
+            <div>
+                <b>${p.part_code}</b><br>
+                <small>${p.part_name}</small>
+            </div>
+        </div>`;
+        });
 
-<textarea id="ng_name"
-class="swal2-textarea"
-placeholder="NG Description"></textarea>
+        $('#partContainer').html(html);
+        updateUI();
+    }
 
-<select id="ng_status"
-class="swal2-input">
+    function updateUI() {
+        $('#countSelected').text($('.part-check:checked').length);
 
-<option value="ACTIVE">ACTIVE</option>
-<option value="INACTIVE">INACTIVE</option>
+        $('.part-row').each(function() {
+            let cb = $(this).find('.part-check');
+            $(this).toggleClass('active', cb.is(':checked'));
+        });
+    }
 
-</select>
+    /* CLICK ROW */
+    $(document).on('click', '.part-row', function(e) {
 
-`,
+        if (e.target.tagName !== 'INPUT') {
+            let cb = $(this).find('.part-check');
+            cb.prop('checked', !cb.prop('checked'));
+        }
 
-            confirmButtonText: 'SAVE',
+        updateUI();
+    });
 
-            preConfirm: () => {
+    /* SEARCH (INI FIX 100%) */
+    $('#searchPart').on('input', function() {
 
-                return {
+        let val = $(this).val().toLowerCase();
 
-                    code: $('#ng_code').val(),
-                    name: $('#ng_name').val(),
-                    status: $('#ng_status').val()
+        $('#partContainer .part-row').each(function() {
 
-                }
+            let text = $(this).text().toLowerCase();
+            $(this).toggle(text.includes(val));
 
-            }
+        });
 
-        }).then(res => {
+    });
 
-            if (!res.isConfirmed) return
+    /* ADD */
+    $('#addNgBtn').click(function() {
 
-            $.post('ajax_ng_type.php', {
+        editId = null;
+        selectedParts = [];
 
-                action: 'insert',
-                code: res.value.code,
-                name: res.value.name,
-                status: res.value.status
+        $('#ng_code').val('');
+        $('#ng_status').val('ACTIVE');
 
-            }, function() {
+        renderParts();
+        $('#ngModal').modal('show');
+    });
 
-                location.reload()
-
-            })
-
-        })
-
-    })
-
-
-    /* =========================
-    EDIT
-    ========================= */
-
+    /* EDIT */
     $('.editNg').click(function() {
 
-        let id = $(this).data('id')
-        let code = $(this).data('code')
-        let name = $(this).data('name')
-        let status = $(this).data('status')
+        let btn = $(this);
 
-        Swal.fire({
+        editId = btn.data('id');
 
-            title: 'Edit NG Type',
+        $('#ng_code').val(btn.data('code'));
+        $('#ng_status').val(btn.data('status'));
 
-            html: `
+        $.get('ajax_ng_type.php', {
+            action: 'get_parts',
+            id: editId
+        }, function(res) {
 
-<input id="ng_code"
-class="swal2-input"
-value="${code}">
+            selectedParts = (res || []).map(x => x.toString());
 
-<textarea id="ng_name"
-class="swal2-textarea">${name}</textarea>
+            renderParts();
+            $('#ngModal').modal('show');
 
-<select id="ng_status"
-class="swal2-input">
+        });
+    });
 
-<option value="ACTIVE">ACTIVE</option>
-<option value="INACTIVE">INACTIVE</option>
+    /* SAVE */
+    $('#saveNg').click(function() {
 
-</select>
+        let data = {
+            code: $('#ng_code').val(),
+            status: $('#ng_status').val(),
+            parts: []
+        };
 
-`,
+        $('.part-check:checked').each(function() {
+            data.parts.push($(this).val());
+        });
 
-            didOpen: () => {
-                $('#ng_status').val(status)
-            },
+        let action = editId ? 'update' : 'insert';
 
-            confirmButtonText: 'UPDATE',
+        $.post('ajax_ng_type.php', {
+            action: action,
+            id: editId,
+            ...data
+        }, function() {
+            location.reload();
+        });
 
-            preConfirm: () => {
-
-                return {
-
-                    code: $('#ng_code').val(),
-                    name: $('#ng_name').val(),
-                    status: $('#ng_status').val()
-
-                }
-
-            }
-
-        }).then(res => {
-
-            if (!res.isConfirmed) return
-
-            $.post('ajax_ng_type.php', {
-
-                action: 'update',
-                id: id,
-                code: res.value.code,
-                name: res.value.name,
-                status: res.value.status
-
-            }, function() {
-
-                location.reload()
-
-            })
-
-        })
-
-    })
-
-
-    /* =========================
-    DELETE
-    ========================= */
-
-    $('.deleteNg').click(function() {
-
-        let id = $(this).data('id')
-
-        Swal.fire({
-
-            title: 'Delete NG Type?',
-            icon: 'warning',
-            showCancelButton: true
-
-        }).then(res => {
-
-            if (!res.isConfirmed) return
-
-            $.post('ajax_ng_type.php', {
-
-                action: 'delete',
-                id: id
-
-            }, function() {
-
-                location.reload()
-
-            })
-
-        })
-
-    })
+    });
 </script>

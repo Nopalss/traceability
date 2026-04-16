@@ -83,6 +83,7 @@ require __DIR__ . '/../../includes/navbar.php';
                                 <th>Unit</th>
                                 <th>Supplier</th>
                                 <th>Remark</th>
+                                <th>Subs</th>
                                 <th>Status</th>
                                 <th>Action</th>
                             </tr>
@@ -115,6 +116,56 @@ require __DIR__ . '/../../includes/navbar.php';
         return arr;
     }
 
+    function fillSubsOptions() {
+
+        let partOptions = '<option value="">-</option>';
+
+        parts.forEach(p => {
+            partOptions += `<option value="${p.part_code}__${p.name_supplier}">
+            ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+        </option>`;
+        });
+
+        document.querySelectorAll('.subs').forEach(select => {
+            let current = select.value;
+            select.innerHTML = partOptions;
+            if (current) select.value = current;
+        });
+    }
+
+    function autoSetSubs() {
+
+        let lastMain = null;
+
+        $("#tableBody tr").each(function() {
+
+            let remark = $(this).find(".remark").val();
+            let partVal = $(this).find(".part-select").val();
+
+            if (!partVal) return;
+
+            let subsSelect = $(this).find(".subs");
+
+            if (remark == 0) {
+                // MAIN
+                lastMain = partVal; // 🔥 FULL VALUE (code + supplier)
+
+                subsSelect.val('');
+                subsSelect.prop("disabled", true);
+
+            } else {
+                // SUBSTITUTE
+                if (lastMain) {
+                    subsSelect.val(lastMain);
+                    subsSelect.prop("disabled", false);
+                } else {
+                    subsSelect.val('');
+                    subsSelect.prop("disabled", true);
+                }
+            }
+
+        });
+    }
     /* ======================
        REFRESH OPTION (ANTI DUPLICATE)
     ====================== */
@@ -187,8 +238,12 @@ require __DIR__ . '/../../includes/navbar.php';
 </select>
 </td>
 
+<td>
+<select class="form-control subs" style="font-size:.69rem">
+    <option value="">-</option>
+</select>
+</td>
 <td style="font-size: .69rem">${error ? '<span style="color:red;font-weight:bold">NOT FOUND</span>' : '<span style="color:green;font-weight:bold">OK</span>'}</td>
-
 <td style="font-size: .69rem"><button class="btn btn-danger btn-sm del">X</button></td>
 </tr>`;
     }
@@ -297,6 +352,8 @@ require __DIR__ . '/../../includes/navbar.php';
 
                 renumber();
                 refreshPartOptions(); // 🔥 penting
+                fillSubsOptions();
+                autoSetSubs();
             }
         });
 
@@ -309,11 +366,17 @@ require __DIR__ . '/../../includes/navbar.php';
         $("#tableBody").append(renderRow($("#tableBody tr").length, '', '-', '', 'Pcs', '-', 0));
         renumber();
         refreshPartOptions();
+        fillSubsOptions();
+        autoSetSubs();
     });
 
     /* ======================
        CHANGE SELECT
     ====================== */
+    $(document).on("change", ".remark", function() {
+        autoSetSubs();
+    });
+
     $(document).on("change", ".part-select", function() {
 
         let selected = $(this).find(":selected");
@@ -328,6 +391,7 @@ require __DIR__ . '/../../includes/navbar.php';
         }
 
         refreshPartOptions(); // 🔥 penting
+        autoSetSubs();
     });
 
     /* ======================
@@ -337,6 +401,7 @@ require __DIR__ . '/../../includes/navbar.php';
         $(this).closest("tr").remove();
         renumber();
         refreshPartOptions(); // 🔥 penting
+        autoSetSubs();
     });
 
 
@@ -354,16 +419,29 @@ require __DIR__ . '/../../includes/navbar.php';
             return;
         }
 
+
         $("#tableBody tr").each(function() {
             let val = $(this).find(".part-select").val();
             let [part_code, supplier_select] = val.split("__");
             let qty = parseFloat($(this).find(".qty").val());
             let unit = $(this).find(".unit").val().trim();
-            let status = $(this).find("td:eq(6)").text();
+            let status = $(this).find("td:eq(7)").text();
             let remark = $(this).find(".remark").val();
+            let subs = $(this).find(".subs").val();
             let supplier = $(this).find(".supplier").text();
             if (!part_code || !qty || !unit) {
                 Swal.fire("Error", "Masih ada data kosong!", "error");
+                error = true;
+                return false;
+            }
+            if (remark == 1 && !subs) {
+                Swal.fire("Error", "SUBSTITUTE harus punya parent MAIN!", "error");
+                error = true;
+                return false;
+            }
+
+            if (subs === val) {
+                Swal.fire("Error", "Part tidak boleh menjadi substitute dirinya sendiri!", "error");
                 error = true;
                 return false;
             }
@@ -398,7 +476,8 @@ require __DIR__ . '/../../includes/navbar.php';
                 qty,
                 unit,
                 remark,
-                supplier
+                supplier,
+                subs // 🔥 NEW
             });
         });
 

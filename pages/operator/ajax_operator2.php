@@ -9,22 +9,24 @@ $action = $_REQUEST['action'] ?? '';
 if ($action == 'load_bom') {
 
     $assy = $_GET['assy'] ?? '';
-
+    $line = $_GET['line'] ?? '';
     $q = $pdo->prepare("
         SELECT pa.part_code,
-               p.part_name,
-               pa.qty,
-               am.lot_no,
-               am.spq,
-               am.remain
-        FROM tbl_part_assy pa
-        JOIN tbl_part p ON p.part_code = pa.part_code
-        LEFT JOIN tbl_active_material am ON am.part_code = pa.part_code
-        WHERE pa.part_assy = ?
+       p.part_name,
+       pa.qty,
+       am.lot_no,
+       am.spq,
+       am.ref_number,
+       am.remain
+FROM tbl_part_assy pa
+JOIN tbl_part p ON p.part_code = pa.part_code
+LEFT JOIN tbl_active_material am 
+    ON am.part_code = pa.part_code 
+    AND am.line_id = ?
+WHERE pa.part_assy = ?
     ");
 
-    $q->execute([$assy]);
-
+    $q->execute([$line, $assy]);
     foreach ($q as $r) {
         echo "<tr>
             <td>{$r['part_code']}</td>
@@ -33,11 +35,37 @@ if ($action == 'load_bom') {
             <td>" . ($r['lot_no'] ?? '-') . "</td>
             <td>" . ($r['spq'] ?? '-') . "</td>
             <td>" . ($r['remain'] ?? '-') . "</td>
+
+<td class='line'>
+
+<div class='btnRemoveLot btnstyle'
+data-part='{$r['part_code']}'
+data-lot='{$r['lot_no']}'
+data-ref='{$r['ref_number']}'>
+
+</div>
+
+<div class='btnAdjustLot btnstyle'
+data-part='{$r['part_code']}'
+data-lot='{$r['lot_no']}'
+data-ref='{$r['ref_number']}'
+data-remain='{$r['remain']}'>
+
+</div>
+
+<div class='btnNgLot btnstyle'
+data-part='{$r['part_code']}'
+data-ref='{$r['ref_number']}'
+data-lot='{$r['lot_no']}'
+data-remain='{$r['remain']}'>
+
+</div>
+
+</td>
         </tr>";
     }
     exit;
 }
-
 
 /* =====================================================
    SCAN MATERIAL
@@ -47,122 +75,232 @@ if ($action == 'scan_material') {
     $part  = $_POST['Z1'] ?? '';
     $lot   = $_POST['Z2'] ?? '';
     if (!$lot) $lot = '-';
-    $qty   = $_POST['Z3'] ?? 0;
+
+    $qty   = intval($_POST['Z3'] ?? 0);
     $mode  = $_POST['mode'] ?? null;
 
-    $assy    = $_POST['assy'] ?? '';
-    $remarks = $_POST['Z4'] ?? '';
-    $ref     = $_POST['Z5'] ?? '';
+    $assy  = $_POST['assy'] ?? '';
+    $ref   = $_POST['Z5'] ?? '';
+
+    $shift = $_POST['shift'] ?? 0;
+    $line  = $_POST['line'] ?? 0;
+
+    $operator = $_SESSION['username'] ?? 'operator';
 
     if (!$assy) {
         echo json_encode(['error' => true, 'message' => 'ASSY kosong']);
         exit;
     }
 
-    if (!$part || !$qty) {
+    if (!$part || $qty <= 0) {
         echo json_encode(['error' => true, 'message' => 'Data material tidak valid']);
         exit;
     }
 
+    /* =========================
+       VALIDASI REF INCOMING
+    ========================== */
 
-    // REF HARUS ADA DI INCOMING
-    $cekRef = $pdo->prepare("SELECT 1 FROM tbl_detail_part WHERE ref_number=? LIMIT 1");
-    $cekRef->execute([$ref]);
+    $cekRef = $pdo->prepare("
+        SELECT remain
+        FROM tbl_detail_part
+        WHERE ref_number=? AND part_code=?
+        LIMIT 1
+    ");
+    $cekRef->execute([$ref, $part]);
+    $refRow = $cekRef->fetch(PDO::FETCH_ASSOC);
 
-    if (!$cekRef->fetch()) {
-        echo json_encode(['error' => true, 'message' => 'Ref material tidak terdaftar di incoming']);
+    if (!$refRow) {
+        echo json_encode(['error' => true, 'message' => 'Ref material tidak terdaftar']);
         exit;
     }
 
-    // VALIDASI BOM
-    $cekBom = $pdo->prepare("SELECT 1 FROM tbl_part_assy WHERE part_assy=? AND part_code=?");
+    $remainIncoming = intval($refRow['remain']);
+
+    /* =========================
+       VALIDASI BOM
+    ========================== */
+
+    $cekBom = $pdo->prepare("
+        SELECT 1
+        FROM tbl_part_assy
+        WHERE part_assy=? AND part_code=?
+    ");
     $cekBom->execute([$assy, $part]);
 
     if (!$cekBom->fetch()) {
         echo json_encode(['error' => true, 'message' => 'Material bukan BOM ASSY ini']);
         exit;
     }
-    try {
+
+    /* =========================
+       CEK LOT SAMA DI LINE
+    ========================== */
+
+    $cekLot = $pdo->prepare("
+        SELECT id
+        FROM tbl_active_material
+        WHERE part_code=? AND lot_no=? AND ref_number=?
+        LIMIT 1
+    ");
+    $cekLot->execute([$part, $lot, $ref]);
+    $lotRow = $cekLot->fetch(PDO::FETCH_ASSOC);
+    if ($lotRow && !$mode) {
+        echo json_encode(['error' => true, 'message' => 'Material(ref) Sudah di Scan']);
+        exit;
+    }
 
 
+    /* =========================
+       CEK MATERIAL AKTIF DI LINE
+    ========================== */
+
+    $cekExist = $pdo->prepare("
+    SELECT COUNT(*) as total
+    FROM tbl_active_material
+    WHERE part_code=? AND line_id=?
+");
+    $cekExist->execute([$part, $line]);
+    $existCount = $cekExist->fetch(PDO::FETCH_ASSOC)['total'];
+
+
+    /* =========================
+       FIRST SCAN
+    ========================== */
+
+    if ($existCount == 0 && !$mode) {
+
+        $pdo->prepare("
+            INSERT INTO tbl_active_material
+            (part_code,lot_no,spq,remain,ref_number,line_id)
+            VALUES (?,?,?,?,?,?)
+        ")->execute([
+            $part,
+            $lot,
+            $qty,
+            $remainIncoming,
+            $ref,
+            $line
+        ]);
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+    /* =========================
+       LOT BERBEDA → POPUP
+    ========================== */
+
+    if ($existCount > 0 && !$mode) {
+        echo json_encode(['needConfirm' => true]);
+        exit;
+    }
+
+
+
+    /* =========================
+       ADD MATERIAL
+    ========================== */
+
+    if ($mode === 'add') {
+
+        $pdo->prepare("
+                INSERT INTO tbl_active_material
+                (part_code,lot_no,spq,remain,ref_number,line_id)
+                VALUES (?,?,?,?,?,?)
+            ")->execute([
+            $part,
+            $lot,
+            $qty,
+            $remainIncoming,
+            $ref,
+            $line
+        ]);
+
+
+        echo json_encode(['success' => true]);
+        exit;
+    }
+
+
+    /* =========================
+       REPLACE MATERIAL
+    ========================== */
+
+    if ($mode === 'remove') {
 
         $pdo->beginTransaction();
-        // EXISTING ACTIVE MATERIAL
-        $exist = $pdo->prepare("SELECT *
-FROM tbl_active_material
-WHERE part_code=?
-FOR UPDATE
-");
-        $exist->execute([$part]);
-        $existingRow = $exist->fetch(PDO::FETCH_ASSOC);
 
-        if ($existingRow && !$mode) {
-            $pdo->rollBack();
-            echo json_encode(['needConfirm' => true]);
-            exit;
-        }
+        try {
 
-        // ===== ADD MODE =====
-        if ($mode === 'add') {
+            $old = $pdo->prepare("
+                SELECT *
+                FROM tbl_active_material
+                WHERE part_code=? AND line_id=?
+            ");
+            $old->execute([$part, $line]);
+
+            foreach ($old as $o) {
+
+                if ($o['remain'] > 0) {
+
+                    $pdo->prepare("
+                        INSERT INTO tbl_material_loss
+                        (part_code,lost_qty,old_remain,operator,reason,assy,ref_number,shift,line_id)
+                        VALUES (?,?,?,?,?,?,?,?,?)
+                    ")->execute([
+                        $part,
+                        $o['remain'],
+                        $o['remain'],
+                        $operator,
+                        'Replace material',
+                        $assy,
+                        $o['ref_number'],
+                        $shift,
+                        $line
+                    ]);
+                }
+            }
 
             $pdo->prepare("
-   UPDATE tbl_active_material
-SET remain=remain+?, ref_number=?
-WHERE part_code=?
-")->execute([$qty, $ref, $part]);
+                DELETE FROM tbl_active_material
+                WHERE part_code=? AND line_id=?
+            ")->execute([$part, $line]);
 
+
+            $pdo->prepare("
+                INSERT INTO tbl_active_material
+                (part_code,lot_no,spq,remain,ref_number,line_id)
+                VALUES (?,?,?,?,?,?)
+            ")->execute([
+                $part,
+                $lot,
+                $qty,
+                $remainIncoming,
+                $ref,
+                $line
+            ]);
+
+            $pdo->commit();
 
             echo json_encode(['success' => true]);
             exit;
-        }
+        } catch (Exception $e) {
 
-        // ===== REPLACE MODE =====
+            $pdo->rollBack();
 
-        if ($existingRow && $existingRow['remain'] > 0) {
-
-            $pdo->prepare("
-           INSERT INTO tbl_material_loss
-(part_code,lost_qty,old_remain,operator,reason,assy,ref_number,shift,line_id)
-VALUES (?,?,?,?,?,?,?,?,?)
-        ")->execute([
-                $part,
-                $existingRow['remain'],
-                $existingRow['remain'],
-                $_SESSION['username'] ?? 'operator',
-                'Replace material',
-                $assy,
-                $ref,
-                $_POST['shift'] ?? 0,
-                $_POST['line'] ?? 0
+            echo json_encode([
+                'error' => true,
+                'message' => $e->getMessage()
             ]);
+            exit;
         }
-
-        // TANDAI INCOMING LAMA SEBAGAI REPLACED
-        $pdo->prepare("
-UPDATE tbl_detail_part
-SET status='REPLACED'
-WHERE part_code=? AND ref_number=?
-")->execute([$part, $ref]);
-        // REPLACE SELALU JALAN
-        $pdo->prepare("
-REPLACE INTO tbl_active_material 
-(part_code,lot_no,spq,remain,ref_number)
-VALUES (?,?,?,?,?)
-")->execute([$part, $lot, $qty, $qty, $ref]);
-
-        $pdo->commit();
-        echo json_encode(['success' => true]);
-        exit;
-    } catch (Exception $e) {
-        $pdo->rollBack();
-        echo json_encode(['success' => false]);
-        exit;
     }
 }
 
 
 /* =====================================================
-   SCAN PRODUCT
+   SCAN PRODUCT (FIFO + UNIT TRACE)
 ===================================================== */
 if ($action == 'scan_product') {
 
@@ -171,45 +309,31 @@ if ($action == 'scan_product') {
     $shift    = $_POST['shift'] ?? 0;
     $line     = $_POST['line'] ?? 0;
     $operator = $_POST['operator'] ?? '';
-    $qty      = $_POST['Z3'] ?? 1;
-    $actual = 1;
+    $qty      = intval($_POST['Z3'] ?? 1);
     $remarks  = $_POST['Z4'] ?? '';
     $ref      = $_POST['Z5'] ?? '';
     $z1       = $_POST['Z1'] ?? '';
+    $operatorRemark = $_POST['operator_remark'] ?? '';
 
     if ($z1 !== $product) {
         echo json_encode(['error' => true, 'message' => 'Product tidak sesuai ASSY']);
         exit;
     }
 
-    $cekSerial = $pdo->prepare("SELECT 1 FROM tbl_detail_product WHERE serial_no=?");
-    $cekSerial->execute([$serial]);
+    $cekSerial = $pdo->prepare("SELECT 1 FROM tbl_detail_product WHERE serial_no=? AND ref_number=? AND product_code=?");
+    $cekSerial->execute([$serial, $ref, $z1]);
 
     if ($cekSerial->fetch()) {
-        echo json_encode(['error' => true, 'message' => 'Serial product sudah pernah discan']);
+        echo json_encode(['error' => true, 'message' => 'Label Product sudah pernah discan']);
         exit;
     }
-
-    // ============================
-    // CEK APAKAH TARGET SUDAH TERCAPAI
-    // ============================
 
     $planningDate = date('Y-m-d');
     if ($shift == 2 && date('H') < 7) {
         $planningDate = date('Y-m-d', strtotime('-1 day'));
     }
 
-
-
-    try {
-
-        $pdo->beginTransaction();
-
-        // ============================
-        // LOCK PLANNING (ANTI DOUBLE PRODUKSI)
-        // ============================
-
-        $cekRemainPlanning = $pdo->prepare("
+    $cekRemainPlanning = $pdo->prepare("
 SELECT 
     SUM(dp.qty) AS total_plan,
     SUM(dp.actual) AS total_actual
@@ -219,208 +343,314 @@ WHERE pp.product_code=?
   AND pp.shift=? 
   AND pp.line_id=? 
   AND pp.production_date=?
-FOR UPDATE
 ");
 
-        $cekRemainPlanning->execute([$product, $shift, $line, $planningDate]);
-        $p = $cekRemainPlanning->fetch(PDO::FETCH_ASSOC);
 
-        $totalPlan   = intval($p['total_plan'] ?? 0);
-        $totalActual = intval($p['total_actual'] ?? 0);
+    $cekRemainPlanning->execute([$product, $shift, $line, $planningDate]);
+    $p = $cekRemainPlanning->fetch(PDO::FETCH_ASSOC);
 
-        if ($totalActual >= $totalPlan) {
-            throw new Exception('Produk ini sudah mencapai target planning');
-        }
+    $totalPlan   = intval($p['total_plan'] ?? 0);
+    $totalActual = intval($p['total_actual'] ?? 0);
+
+    if ($totalActual >= $totalPlan) {
+        echo json_encode([
+            'error' => true,
+            'message' => 'Produk ini sudah mencapai target planning'
+        ]);
+        exit;
+    }
+
+    try {
+
+        $pdo->beginTransaction();
+
+        /* =========================
+           INSERT OUTPUT
+        ========================== */
+
         $pdo->prepare("
             INSERT INTO tbl_production_output
-            (product_code,serial_no,shift,line_id,operator,qty,created_at)
-            VALUES (?,?,?,?,?,?,NOW())
-        ")->execute([$product, $serial, $shift, $line, $operator, $qty]);
+            (product_code,serial_no,shift,line_id,operator,qty,operator_remark,created_at,ref_number)
+            VALUES (?,?,?,?,?,?,?,NOW(),?)
+        ")->execute([
+            $product,
+            $serial,
+            $shift,
+            $line,
+            $operator,
+            $qty,
+            $operatorRemark,
+            $ref
+        ]);
+
+        /* =========================
+           INSERT BOX
+        ========================== */
 
         $pdo->prepare("
-            INSERT INTO tbl_detail_product
-            (product_code,serial_no,qty,shift,line_id,operator,ref_number,remarks)
-            VALUES (?,?,?,?,?,?,?,?)
-        ")->execute([$product, $serial, $qty, $shift, $line, $operator, $ref, $remarks]);
+           INSERT INTO tbl_detail_product
+(product_code,serial_no,qty,shift,line_id,operator,ref_number,remarks,operator_remark)
+VALUES (?,?,?,?,?,?,?,?,?)
+        ")->execute([
+            $product,
+            $serial,
+            $qty,
+            $shift,
+            $line,
+            $operator,
+            $ref,
+            $remarks,
+            $operatorRemark
+        ]);
 
-        $bom = $pdo->prepare("SELECT part_code,qty FROM tbl_part_assy WHERE part_assy=?");
+
+        /* =========================
+           GENERATE UNIT
+        ========================== */
+
+        $unitIds = [];
+
+        for ($i = 1; $i <= $qty; $i++) {
+
+            $pdo->prepare("
+                INSERT INTO tbl_product_unit
+                (serial_no,product_code,unit_no,ref_number)
+                VALUES (?,?,?,?)
+            ")->execute([$serial, $product, $i, $ref]);
+
+            $unitIds[$i] = $pdo->lastInsertId();
+        }
+
+
+        /* =========================
+           AMBIL BOM
+        ========================== */
+
+        $bom = $pdo->prepare("
+            SELECT part_code,qty 
+            FROM tbl_part_assy
+            WHERE part_assy=?
+        ");
+
         $bom->execute([$product]);
+
 
         foreach ($bom as $b) {
 
-            $used = $b['qty'] * $qty;
+            $part = $b['part_code'];
+            $perUnit = intval($b['qty']);
 
-            $cekRemain = $pdo->prepare("SELECT remain,lot_no,ref_number 
-FROM tbl_active_material 
-WHERE part_code=?
-FOR UPDATE
-");
-            $cekRemain->execute([$b['part_code']]);
-            $r = $cekRemain->fetch(PDO::FETCH_ASSOC);
-            $refMaterial = $r['ref_number'];
+            $totalNeed = $perUnit * $qty;
 
-            if (!$r || $r['remain'] < $used) throw new Exception();
+            /* =========================
+               FIFO ACTIVE MATERIAL
+            ========================== */
 
-            // TRACE PRODUKSI
-            $pdo->prepare("
-        INSERT INTO tbl_detail_production
-        (product_code,serial_no,part_code,used_qty,lot_no)
-        VALUES (?,?,?,?,?)
-    ")->execute([$product, $serial, $b['part_code'], $used, $r['lot_no']]);
+            $lots = $pdo->prepare("
+                SELECT *
+                FROM tbl_active_material
+                WHERE part_code=? AND remain>0
+                ORDER BY id ASC
+            ");
 
-            // POTONG ACTIVE MATERIAL
-            $pdo->prepare("
-        UPDATE tbl_active_material 
-        SET remain=remain-?
-        WHERE part_code=?
-    ")->execute([$used, $b['part_code']]);
+            $lots->execute([$part]);
 
+            $lotRows = $lots->fetchAll(PDO::FETCH_ASSOC);
 
-            // ===============================
-            // POTONG INCOMING PER REF
-            // ===============================
-            // cari ref material berdasarkan lot aktif
-            $refMaterial = $r['ref_number'];
-
-            if (!$refMaterial) {
-                throw new Exception('Ref material tidak ditemukan di active material');
+            if (!$lotRows) {
+                throw new Exception("Material $part tidak tersedia");
             }
 
-            // potong remain incoming
-            $pdo->prepare("
-UPDATE tbl_detail_part
-SET remain = remain - ?
-WHERE ref_number=?
-")->execute([$used, $refMaterial]);
+            $need = $totalNeed;
+
+            $lotUsage = [];
+
+            foreach ($lotRows as $lot) {
+
+                if ($need <= 0) break;
+
+                $take = min($lot['remain'], $need);
+
+                $lotUsage[] = [
+                    'lot_no' => $lot['lot_no'],
+                    'ref_part' => $lot['ref_number'],
+                    'qty' => $take,
+                    'id' => $lot['id']
+                ];
+
+                $need -= $take;
+            }
+
+            if ($need > 0) {
+                throw new Exception("Material $part tidak cukup");
+            }
+
+
+            /* =========================
+               TRACE PER UNIT
+            ========================== */
+
+            $lotIndex = 0;
+            $lotRemain = $lotUsage[0]['qty'];
+
+            foreach ($unitIds as $unitNo => $unitId) {
+
+                $needUnit = $perUnit;
+
+                while ($needUnit > 0) {
+
+                    if ($lotRemain == 0) {
+
+                        $lotIndex++;
+                        $lotRemain = $lotUsage[$lotIndex]['qty'];
+                    }
+
+                    $take = min($lotRemain, $needUnit);
+
+                    $pdo->prepare("
+                        INSERT INTO tbl_unit_material
+                        (unit_id,part_code,lot_no,used_qty,ref_number)
+                        VALUES (?,?,?,?,?)
+                    ")->execute([
+                        $unitId,
+                        $part,
+                        $lotUsage[$lotIndex]['lot_no'],
+                        $take,
+                        $lotUsage[$lotIndex]['ref_part']
+                    ]);
+
+                    $lotRemain -= $take;
+                    $needUnit -= $take;
+                }
+            }
+
+
+            /* =========================
+               INSERT SUMMARY TRACE
+            ========================== */
+
+            foreach ($lotUsage as $lu) {
+
+                $pdo->prepare("
+                    INSERT INTO tbl_detail_production
+                    (product_code,serial_no,part_code,used_qty,lot_no,ref_number,ref_product)
+                    VALUES (?,?,?,?,?,?,?)
+                ")->execute([
+                    $product,
+                    $serial,
+                    $part,
+                    $lu['qty'],
+                    $lu['lot_no'],
+                    $lu['ref_part'],
+                    $ref
+                ]);
+
+
+                /* =========================
+                   UPDATE ACTIVE MATERIAL
+                ========================== */
+
+                $pdo->prepare("
+                    UPDATE tbl_active_material
+                    SET remain = remain - ?
+                    WHERE id=?
+                ")->execute([$lu['qty'], $lu['id']]);
+
+
+                /* =========================
+                   UPDATE INCOMING
+                ========================== */
+
+                $pdo->prepare("
+                    UPDATE tbl_detail_part
+                    SET remain = remain - ?
+                    WHERE ref_number=?
+                ")->execute([$lu['qty'], $lu['ref_part']]);
+
+
+                $pdo->prepare("
+                    UPDATE tbl_detail_part
+                    SET status='USED'
+                    WHERE ref_number=? AND remain<=0
+                ")->execute([$lu['ref_part']]);
+            }
+
+
+            /* =========================
+               HAPUS LOT HABIS
+            ========================== */
 
             $pdo->prepare("
-UPDATE tbl_detail_part
-SET status='USED'
-WHERE ref_number=? AND remain<=0
-")->execute([$refMaterial]);
+                DELETE FROM tbl_active_material
+                WHERE remain<=0
+            ")->execute();
         }
 
-        // ============================
-        // UPDATE ACTUAL PLANNING FLEXIBLE (SKIP 0 + AUTO NEXT SLOT)
-        // ============================
 
-        // ambil planning date (support shift malam)
-        $planningDate = date('Y-m-d');
-        if ($shift == 2 && date('H') < 7) {
-            $planningDate = date('Y-m-d', strtotime('-1 day'));
-        }
+        /* =========================
+           UPDATE PLANNING
+        ========================== */
 
-        // ambil pp_id
         $pp = $pdo->prepare("
-    SELECT pp_id
-    FROM tbl_production_planning
-    WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
-    ORDER BY pp_id DESC LIMIT 1
-");
+            SELECT pp_id
+            FROM tbl_production_planning
+            WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
+            LIMIT 1
+        ");
+
         $pp->execute([$product, $shift, $line, $planningDate]);
+
         $ppRow = $pp->fetch(PDO::FETCH_ASSOC);
 
         if ($ppRow) {
 
-            // ambil shift start dari tbl_shift
             $shiftStartStmt = $pdo->prepare("
     SELECT start 
     FROM tbl_shift 
-    WHERE shift=?
+    WHERE shift=? 
     LIMIT 1
 ");
             $shiftStartStmt->execute([$shift]);
             $shiftStart = $shiftStartStmt->fetchColumn();
 
-            if ($shiftStart === false) {
-                throw new Exception('Shift tidak ditemukan');
-            }
+            $slots = $pdo->prepare("
+    SELECT id, qty, actual, jam
+    FROM tbl_detail_production_planning
+    WHERE pp_id=?
+    ORDER BY
+    CASE
+        WHEN jam='OT' THEN 99
+        WHEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) < ?
+            THEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) + 24
+        ELSE CAST(SUBSTRING(jam,1,2) AS UNSIGNED)
+    END
+");
 
-            // ambil slot planning
-            $shiftStart = (int)$shiftStart;
+            $slots->execute([$ppRow['pp_id'], $shiftStart]);
 
-            $sql = "
-SELECT id, qty, actual, jam
-FROM tbl_detail_production_planning
-WHERE pp_id=?
-FOR UPDATE
-ORDER BY
-CASE
-    WHEN jam='OT' THEN 99
-    WHEN CAST(SUBSTRING_INDEX(jam,':',1) AS UNSIGNED) < $shiftStart
-        THEN CAST(SUBSTRING_INDEX(jam,':',1) AS UNSIGNED) + 24
-    ELSE CAST(SUBSTRING_INDEX(jam,':',1) AS UNSIGNED)
-END
-";
+            $remaining = $qty;
 
-            $slots = $pdo->prepare($sql);
-            $slots->execute([$ppRow['pp_id']]);
-            $allSlots = $slots->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($slots as $slot) {
 
+                if ($remaining <= 0) break;
 
-            foreach ($allSlots as $slot) {
-
-                // skip kalau target 0
                 if ($slot['qty'] <= 0) continue;
 
-                // cari slot pertama yang belum penuh
-                if ($slot['actual'] < $slot['qty']) {
+                $capacity = $slot['qty'] - $slot['actual'];
 
-                    $pdo->prepare("
-                UPDATE tbl_detail_production_planning
-                SET actual = actual + 1
-                WHERE id=?
-            ")->execute([$slot['id']]);
+                if ($capacity <= 0) continue;
 
-                    break; // stop setelah update 1 slot
-                }
+                $take = min($capacity, $remaining);
+
+                $pdo->prepare("
+        UPDATE tbl_detail_production_planning
+        SET actual = actual + ?
+        WHERE id=?
+    ")->execute([$take, $slot['id']]);
+
+                $remaining -= $take;
             }
         }
-
-        //         // ambil jam sekarang (format 03-04)
-        //         $nowHour = date('H');
-        //         $nextHour = sprintf('%02d', ($nowHour + 1) % 24);
-        //         $currentJam = sprintf('%02d-%02d', $nowHour, $nextHour);
-
-        //         // ambil planning date (support shift malam)
-        //         $planningDate = date('Y-m-d');
-        //         if ($shift == 2 && date('H') < 7) {
-        //             $planningDate = date('Y-m-d', strtotime('-1 day'));
-        //         }
-
-        //         // ambil pp_id
-        //         $pp = $pdo->prepare("
-        //     SELECT pp_id
-        //     FROM tbl_production_planning
-        //     WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
-        //     ORDER BY pp_id DESC LIMIT 1
-        // ");
-        //         $pp->execute([$product, $shift, $line, $planningDate]);
-
-        //         $ppRow = $pp->fetch(PDO::FETCH_ASSOC);
-
-        //         if ($ppRow) {
-
-        //             // coba update jam sekarang
-        //             $upd = $pdo->prepare("
-        //         UPDATE tbl_detail_production_planning
-        //         SET actual = actual + ?
-        //         WHERE pp_id=? AND jam=?
-        //     ");
-        //             $upd->execute([$actual, $ppRow['pp_id'], $currentJam]);
-
-        //             // kalau tidak kena (telat jam) → masuk jam terakhir
-        //             if ($upd->rowCount() == 0) {
-
-        //                 $pdo->prepare("
-        //             UPDATE tbl_detail_production_planning
-        //             SET actual = actual + ?
-        //             WHERE pp_id=?
-        //             ORDER BY jam DESC
-        //             LIMIT 1
-        //         ")->execute([$actual, $ppRow['pp_id']]);
-        //             }
-        //         }
 
         // ============================
         // CEK APAKAH BARU SAJA SELESAI TARGET
@@ -455,10 +685,15 @@ WHERE pp.product_code=?
             'finished' => $isFinished
         ]);
     } catch (Exception $e) {
+
         $pdo->rollBack();
-        // echo json_encode(['error' => true, 'message' => 'Gagal simpan produksi']);
-        echo json_encode(['error' => true, 'message' => $e->getMessage()]);
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
     }
+
     exit;
 }
 
@@ -470,10 +705,16 @@ if ($action == 'output') {
 
     $line = $_SESSION['line_id'] ?? 7;
 
+    $query = $pdo->prepare("SELECT line_name FROM tbl_line WHERE line_id=?");
+    $query->execute([$line]);
+    $lineName = $query->fetchColumn();
     $q = $pdo->prepare("
-        SELECT * FROM tbl_production_output
+        SELECT *
+        FROM tbl_production_output
         WHERE line_id=?
-        ORDER BY id DESC LIMIT 20
+        AND DATE(created_at)=CURDATE()
+        ORDER BY id DESC
+
     ");
     $q->execute([$line]);
 
@@ -482,11 +723,12 @@ if ($action == 'output') {
             <td>" . date('d/m/Y', strtotime($r['created_at'])) . "</td>
             <td>" . date('H:i:s', strtotime($r['created_at'])) . "</td>
             <td>{$r['shift']}</td>
-            <td>{$r['line_id']}</td>
+            <td>{$lineName}</td>
             <td>{$r['operator']}</td>
             <td>{$r['qty']}</td>
             <td>{$r['serial_no']}</td>
-            <td></td>
+            <td>{$r['ref_number']}</td>
+            <td>{$r['operator_remark']}</td>
         </tr>";
     }
     exit;
@@ -557,5 +799,1154 @@ if ($action == 'load_assy') {
     $q->execute([$today, $line, $shift]);
 
     echo json_encode($q->fetchAll(PDO::FETCH_COLUMN));
+    exit;
+}
+
+/* =====================================================
+   GET MATERIAL FOR EXIT MECA (BOX)
+===================================================== */
+
+if ($action == 'get_exit_material') {
+
+    $serial = $_POST['serial'] ?? '';
+    $ref = $_POST['ref'] ?? '';
+
+    if (!$serial || !$ref) {
+        echo json_encode(['error' => true, 'message' => 'Material kosong']);
+        exit;
+    }
+
+    $p = $pdo->prepare("
+        SELECT is_ng
+        FROM tbl_detail_product
+        WHERE serial_no=? AND ref_number=?
+        ");
+
+    $p->execute([$serial, $ref]);
+    $prod = $p->fetch(PDO::FETCH_ASSOC);
+
+    if ($prod && $prod['is_ng'] == 1) {
+        echo json_encode([
+            'error' => true,
+            'message' => 'Product sudah pernah EXIT MECA'
+        ]);
+        exit;
+    }
+
+    $stmt = $pdo->prepare("
+        SELECT 
+            dp.part_code,
+            p.part_name,
+            dp.lot_no,
+            dp.ref_number,
+            dp.used_qty
+        FROM tbl_detail_production dp
+        JOIN tbl_part p ON p.part_code = dp.part_code
+        WHERE dp.serial_no=? AND dp.ref_product=?
+    ");
+
+    $stmt->execute([$serial, $ref]);
+
+    $parts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!$parts) {
+        echo json_encode([
+            'error' => true,
+            'message' => 'Trace material tidak ditemukan'
+        ]);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'parts' => $parts
+    ]);
+
+    exit;
+}
+
+/* =====================================================
+   GET UNITS
+===================================================== */
+
+if ($action == 'get_units') {
+
+    $serial = $_POST['serial'] ?? '';
+    $ref = $_POST['ref'] ?? '';
+
+    $p = $pdo->prepare("
+        SELECT is_ng
+        FROM tbl_detail_product
+        WHERE serial_no=? AND ref_number=?
+        ");
+
+    $p->execute([$serial, $ref]);
+    $prod = $p->fetch(PDO::FETCH_ASSOC);
+
+    if ($prod && $prod['is_ng'] == 1) {
+        echo json_encode([
+            'error' => true,
+            'message' => 'Product sudah pernah EXIT MECA'
+        ]);
+        exit;
+    }
+
+    $q = $pdo->prepare("
+        SELECT unit_no
+        FROM tbl_product_unit
+        WHERE serial_no=? AND ref_number=?
+        ORDER BY unit_no
+    ");
+
+    $q->execute([$serial, $ref]);
+
+    $units = $q->fetchAll(PDO::FETCH_COLUMN);
+
+    if (!$units) {
+        echo json_encode([
+            'error' => true,
+            'message' => 'Unit tidak ditemukan'
+        ]);
+        exit;
+    }
+
+    echo json_encode([
+        'success' => true,
+        'units' => $units
+    ]);
+
+    exit;
+}
+
+/* =====================================================
+   GET UNIT PARTS
+===================================================== */
+
+if ($action == 'get_unit_parts') {
+
+    $serial = $_POST['serial'] ?? '';
+    $ref = $_POST['ref'] ?? '';
+    $units  = $_POST['units'] ?? [];
+
+    if (!$units) {
+        echo json_encode(['error' => true, 'message' => 'Unit kosong']);
+        exit;
+    }
+
+
+    $in = implode(',', array_fill(0, count($units), '?'));
+    $params = array_merge([$serial, $ref], $units);
+
+    $stmt = $pdo->prepare("
+        SELECT 
+            um.part_code,
+            p.part_name,
+            um.lot_no,
+            SUM(um.used_qty) used_qty
+        FROM tbl_product_unit u
+        JOIN tbl_unit_material um ON um.unit_id=u.id
+        JOIN tbl_part p ON p.part_code=um.part_code
+        WHERE u.serial_no=? AND u.ref_number=?
+        AND u.unit_no IN ($in)
+        GROUP BY um.part_code,um.lot_no
+    ");
+
+    $stmt->execute($params);
+
+    echo json_encode([
+        'success' => true,
+        'parts' => $stmt->fetchAll(PDO::FETCH_ASSOC)
+    ]);
+
+    exit;
+}
+
+/* =====================================================
+   EXIT MECA
+===================================================== */
+if ($action == 'exit_meca') {
+
+    $serial = $_POST['serial'] ?? '';
+    $qty = intval($_POST['qty']) ?? '';
+    $ref_product = $_POST['ref_product'] ?? '';
+    $parts  = $_POST['parts'] ?? [];
+    $units  = $_POST['units'] ?? [];
+    $line   = $_POST['line'] ?? 0;
+    $shift  = $_POST['shift'] ?? 0;
+    $ngType = $_POST['ng_type'] ?? 'MECA';
+
+    $operator = $_SESSION['username'] ?? 'operator';
+
+    if (!$serial || !$ref_product) {
+        echo json_encode(['error' => true, 'message' => 'Serial kosong']);
+        exit;
+    }
+
+    try {
+
+        $pdo->beginTransaction();
+
+        /* =========================
+           AMBIL PRODUCT
+        ========================= */
+
+        $p = $pdo->prepare("
+        SELECT product_code, is_ng
+        FROM tbl_detail_product
+        WHERE serial_no=? AND ref_number=?
+        ");
+
+        $p->execute([$serial, $ref_product]);
+        $prod = $p->fetch(PDO::FETCH_ASSOC);
+
+        if (!$prod) {
+            throw new Exception("Product tidak ditemukan");
+        }
+
+        if ($prod && $prod['is_ng'] == 1) {
+            echo json_encode([
+                'error' => true,
+                'message' => 'Product sudah pernah EXIT MECA'
+            ]);
+            exit;
+        }
+
+        $product = $prod['product_code'];
+
+        /* =========================
+           INSERT HEADER NG
+        ========================= */
+
+        $pdo->prepare("
+        INSERT INTO tbl_ng_product
+        (serial_no,product_code,line_id,shift,operator,status,ref_number)
+        VALUES (?,?,?,?,?,'EXIT_MECA',?)
+        ")->execute([
+            $serial,
+            $product,
+            $line,
+            $shift,
+            $operator,
+            $ref_product
+        ]);
+
+        $ngId = $pdo->lastInsertId();
+
+
+        /* =========================
+           ROLLBACK PLANNING ACTUAL
+        ========================= */
+
+        $pp = $pdo->prepare("
+        SELECT pp_id
+        FROM tbl_production_planning
+        WHERE product_code=? AND shift=? AND line_id=?
+        ORDER BY pp_id DESC
+        LIMIT 1
+        ");
+
+        $pp->execute([$product, $shift, $line]);
+        $ppRow = $pp->fetch(PDO::FETCH_ASSOC);
+
+        if ($ppRow) {
+            $remaining = $qty;
+            $shiftData = $pdo->prepare("
+    SELECT start
+    FROM tbl_shift
+    WHERE shift=?
+");
+            $shiftData->execute([$shift]);
+            $shiftRow = $shiftData->fetch(PDO::FETCH_ASSOC);
+
+            $shiftStart = intval($shiftRow['start'] ?? 0);
+            $slots = $pdo->prepare("
+    SELECT id, actual
+    FROM tbl_detail_production_planning
+    WHERE pp_id=? AND actual > 0
+    ORDER BY
+CASE
+    WHEN jam='OT' THEN 99
+    WHEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) < ?
+        THEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) + 24
+    ELSE CAST(SUBSTRING(jam,1,2) AS UNSIGNED)
+END DESC
+");
+
+            $slots->execute([$ppRow['pp_id'], $shiftStart]);
+
+            foreach ($slots as $slot) {
+
+                if ($remaining <= 0) break;
+
+                $available = $slot['actual'];
+
+                if ($available <= 0) continue;
+
+                $take = min($available, $remaining);
+
+                $pdo->prepare("
+        UPDATE tbl_detail_production_planning
+        SET actual = actual - ?
+        WHERE id=?
+    ")->execute([$take, $slot['id']]);
+
+                $remaining -= $take;
+            }
+        }
+
+
+        /* =========================
+           TRACE MATERIAL
+        ========================= */
+
+        if ($units) {
+
+            $in = implode(',', array_fill(0, count($units), '?'));
+            $params = array_merge([$serial, $ref_product], $units);
+
+            $stmt = $pdo->prepare("
+            SELECT 
+                um.part_code,
+                um.lot_no,
+                SUM(um.used_qty) used_qty,
+                um.ref_number
+            FROM tbl_product_unit u
+            JOIN tbl_unit_material um ON um.unit_id=u.id
+            WHERE u.serial_no=? AND u.ref_number=?
+            AND u.unit_no IN ($in)
+            GROUP BY um.part_code,um.lot_no
+            ");
+
+            $stmt->execute($params);
+
+            $traceRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            /* =========================
+           INSERT NG PART
+        ========================= */
+
+            foreach ($parts as $p) {
+
+                $part  = $p['part_code'];
+                $lot   = $p['lot_no'];
+                $ngQty = intval($p['ng_qty']);
+                $ref_part = $p['ref_number'];
+
+                $used = 0;
+
+                foreach ($traceRows as $t) {
+                    if ($t['part_code'] == $part && $t['lot_no'] == $lot) {
+                        $used = $t['used_qty'];
+                        break;
+                    }
+                }
+
+                if ($used == 0) continue;
+
+                if ($ngQty > $used) $ngQty = $used;
+
+                $pdo->prepare("
+            INSERT INTO tbl_ng_part
+            (ng_id,part_code,lot_no,used_qty,ng_qty,ng_type,ref_part)
+            VALUES (?,?,?,?,?,?)
+            ")->execute([
+                    $ngId,
+                    $part,
+                    $lot,
+                    $used,
+                    $ngQty,
+                    $ngType,
+                    $ref_part
+                ]);
+            }
+
+
+            /* =========================
+           RETURN MATERIAL
+        ========================= */
+
+            foreach ($traceRows as $t) {
+
+                $part = $t['part_code'];
+                $lot  = $t['lot_no'];
+                $used = $t['used_qty'];
+                $ref_part = $t['ref_number'];
+
+                $ng = $pdo->prepare("
+            SELECT SUM(ng_qty)
+            FROM tbl_ng_part
+            WHERE ng_id=? AND part_code=? AND lot_no=? AND ref_number=?
+            ");
+
+                $ng->execute([$ngId, $part, $lot, $ref_part]);
+                $ngQty = intval($ng->fetchColumn());
+
+                $return = $used - $ngQty;
+
+                if ($return <= 0) continue;
+
+                /* RETURN KE LINE */
+
+                $cek = $pdo->prepare("
+            SELECT id
+            FROM tbl_active_material
+            WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+            ");
+
+                $cek->execute([$part, $lot, $line, $ref_part]);
+                $row = $cek->fetch(PDO::FETCH_ASSOC);
+
+                if ($row) {
+
+                    $pdo->prepare("
+                UPDATE tbl_active_material
+                SET remain = remain + ?
+                WHERE id=?
+                ")->execute([$return, $row['id']]);
+                } else {
+
+                    $pdo->prepare("
+                INSERT INTO tbl_active_material
+                (part_code,lot_no,spq,remain,line_id, ref_number)
+                VALUES (?,?,?,?,?,?)
+                ")->execute([
+                        $part,
+                        $lot,
+                        $return,
+                        $return,
+                        $line,
+                        $ref_part
+                    ]);
+                }
+
+
+                /* RETURN KE INCOMING */
+
+                $pdo->prepare("
+            UPDATE tbl_detail_part
+            SET remain = remain + ?
+            WHERE lot_no=? AND ref_number=?
+            ")->execute([
+                    $return,
+                    $lot,
+                    $ref_part
+                ]);
+            }
+
+
+            /* SET PRODUCT NG */
+
+            $pdo->prepare("
+        UPDATE tbl_detail_product
+        SET is_ng=1
+        WHERE serial_no=? AND ref_number=?
+        ")->execute([$serial, $ref_product]);
+        } else {
+
+            $stmt = $pdo->prepare("
+                SELECT part_code,lot_no,used_qty,ref_number
+                FROM tbl_detail_production
+                WHERE serial_no=? AND ref_product=?
+            ");
+
+            $stmt->execute([$serial, $ref_product]);
+
+            $traceRows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            /* =========================
+           INSERT NG PART
+        ========================= */
+
+            foreach ($parts as $p) {
+
+                $part  = $p['part_code'];
+                $lot   = $p['lot_no'];
+                $ref_part   = $p['ref_number'];
+                $ngQty = intval($p['ng_qty']);
+
+                $used = 0;
+
+                foreach ($traceRows as $t) {
+                    if ($t['part_code'] == $part && $t['lot_no'] == $lot && $t['ref_number'] == $ref_part) {
+                        $used = $t['used_qty'];
+                        break;
+                    }
+                }
+
+                if ($used == 0) continue;
+
+                if ($ngQty > $used) $ngQty = $used;
+
+                $pdo->prepare("
+            INSERT INTO tbl_ng_part
+            (ng_id,part_code,lot_no,used_qty,ng_qty,ng_type, ref_part)
+            VALUES (?,?,?,?,?,?,?)
+            ")->execute([
+                    $ngId,
+                    $part,
+                    $lot,
+                    $used,
+                    $ngQty,
+                    $ngType,
+                    $ref_part
+                ]);
+            }
+
+
+            /* =========================
+           RETURN MATERIAL
+        ========================= */
+
+            foreach ($traceRows as $t) {
+
+                $part = $t['part_code'];
+                $lot  = $t['lot_no'];
+                $used = $t['used_qty'];
+                $ref_part = $t['ref_number'];
+
+                $ng = $pdo->prepare("
+            SELECT SUM(ng_qty)
+            FROM tbl_ng_part
+            WHERE ng_id=? AND part_code=? AND lot_no=?  AND ref_part=?
+            ");
+
+                $ng->execute([$ngId, $part, $lot, $ref_part]);
+                $ngQty = intval($ng->fetchColumn());
+
+                $return = $used - $ngQty;
+
+                if ($return <= 0) continue;
+
+                /* RETURN KE LINE */
+
+                $cek = $pdo->prepare("
+            SELECT id
+            FROM tbl_active_material
+            WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+            ");
+
+                $cek->execute([$part, $lot, $line, $ref_part]);
+                $row = $cek->fetch(PDO::FETCH_ASSOC);
+
+                if ($row) {
+
+                    $pdo->prepare("
+                UPDATE tbl_active_material
+                SET remain = remain + ?
+                WHERE id=?
+                ")->execute([$return, $row['id']]);
+                } else {
+
+                    $pdo->prepare("
+                INSERT INTO tbl_active_material
+                (part_code,lot_no,spq,remain,line_id, ref_number)
+                VALUES (?,?,?,?,?,?)
+                ")->execute([
+                        $part,
+                        $lot,
+                        $return,
+                        $return,
+                        $line,
+                        $ref_part
+                    ]);
+                }
+
+                /* RETURN KE INCOMING */
+
+                $pdo->prepare("
+            UPDATE tbl_detail_part
+            SET remain = remain + ?
+            WHERE lot_no=? AND ref_number=?
+            ")->execute([
+                    $return,
+                    $lot,
+                    $ref_part
+                ]);
+            }
+
+            /* SET PRODUCT NG */
+
+            $pdo->prepare("
+        UPDATE tbl_detail_product
+        SET is_ng=1
+        WHERE serial_no=? AND ref_number=?
+        ")->execute([$serial, $ref_product]);
+        }
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'Exit Meca berhasil'
+        ]);
+    } catch (Exception $e) {
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
+    }
+
+    exit;
+}
+
+
+if ($action == 'in_meca') {
+
+    $serial = trim($_POST['serial'] ?? '');
+    $ref = trim($_POST['ref'] ?? '');
+    $qty_product = intval($_POST['qty']) ?? '';
+
+    if (!$serial || !$ref) {
+        echo json_encode(['error' => true, 'message' => 'Serial kosong']);
+        exit;
+    }
+
+    try {
+
+        $pdo->beginTransaction();
+
+        /* =========================
+           CEK PRODUCT
+        ========================= */
+
+        $prod = $pdo->prepare("
+            SELECT product_code,qty,shift,line_id,ref_number
+            FROM tbl_detail_product
+            WHERE serial_no=? AND ref_number=?
+        ");
+        $prod->execute([$serial, $ref]);
+        $p = $prod->fetch(PDO::FETCH_ASSOC);
+
+        if (!$p) {
+            throw new Exception("Product tidak ditemukan");
+        }
+
+        $product = $p['product_code'];
+        $qty     = intval($p['qty']);
+        $shift   = $p['shift'];
+        $line    = $p['line_id'];
+
+        /* =========================
+           CEK EXIT MECA
+        ========================= */
+
+        $ng = $pdo->prepare("
+            SELECT id
+            FROM tbl_ng_product
+            WHERE serial_no=? AND status='EXIT_MECA' AND ref_number=?
+        ");
+        $ng->execute([$serial, $ref]);
+
+        if (!$ng->fetch()) {
+            throw new Exception("Product belum EXIT MECA");
+        }
+
+        /* =========================
+           HAPUS TRACE LAMA
+        ========================= */
+
+        $unitIds = $pdo->prepare("
+            SELECT id
+            FROM tbl_product_unit
+            WHERE serial_no=? AND ref_number=?
+        ");
+        $unitIds->execute([$serial, $ref]);
+        $units = $unitIds->fetchAll(PDO::FETCH_COLUMN);
+
+        if ($units) {
+
+            $in = implode(',', array_fill(0, count($units), '?'));
+
+            $pdo->prepare("
+                DELETE FROM tbl_unit_material
+                WHERE unit_id IN ($in)
+            ")->execute($units);
+        }
+
+        $pdo->prepare("
+            DELETE FROM tbl_detail_production
+            WHERE serial_no=? AND ref_product=?
+        ")->execute([$serial, $ref]);
+
+        /* =========================
+           AMBIL BOM
+        ========================= */
+
+        $bom = $pdo->prepare("
+            SELECT part_code,qty
+            FROM tbl_part_assy
+            WHERE part_assy=?
+        ");
+        $bom->execute([$product]);
+
+        foreach ($bom as $b) {
+
+            $part = $b['part_code'];
+            $perUnit = intval($b['qty']);
+            $totalNeed = $perUnit * $qty;
+
+            /* =========================
+               FIFO MATERIAL
+            ========================= */
+
+            $lots = $pdo->prepare("
+                SELECT *
+                FROM tbl_active_material
+                WHERE part_code=? AND remain>0
+                ORDER BY id ASC
+            ");
+            $lots->execute([$part]);
+            $lotRows = $lots->fetchAll(PDO::FETCH_ASSOC);
+
+            if (!$lotRows) {
+                throw new Exception("Material $part tidak tersedia");
+            }
+
+            $need = $totalNeed;
+            $lotUsage = [];
+
+            foreach ($lotRows as $lot) {
+
+                if ($need <= 0) break;
+
+                $take = min($lot['remain'], $need);
+
+                $lotUsage[] = [
+                    'lot_no' => $lot['lot_no'],
+                    'ref_part' => $lot['ref_number'],
+                    'qty' => $take,
+                    'id' => $lot['id']
+                ];
+
+                $need -= $take;
+            }
+
+            if ($need > 0) {
+                throw new Exception("Material $part tidak cukup");
+            }
+
+            foreach ($lotUsage as $lu) {
+
+                $pdo->prepare("
+                    INSERT INTO tbl_detail_production
+                    (product_code,serial_no,part_code,used_qty,lot_no,ref_number,ref_product)
+                    VALUES (?,?,?,?,?,?,?)
+                ")->execute([
+                    $product,
+                    $serial,
+                    $part,
+                    $lu['qty'],
+                    $lu['lot_no'],
+                    $lu['ref_part'],
+                    $ref
+                ]);
+
+                $pdo->prepare("
+                    UPDATE tbl_active_material
+                    SET remain = remain - ?
+                    WHERE id=?
+                ")->execute([
+                    $lu['qty'],
+                    $lu['id']
+                ]);
+
+                $pdo->prepare("
+                    UPDATE tbl_detail_part
+                    SET remain = remain - ?
+                    WHERE ref_number=?
+                ")->execute([
+                    $lu['qty'],
+                    $lu['ref_part']
+                ]);
+            }
+        }
+
+        /* =========================
+           UPDATE PLANNING (FIX JAM)
+        ========================= */
+
+        $planningDate = date('Y-m-d');
+        if ($shift == 2 && date('H') < 7) {
+            $planningDate = date('Y-m-d', strtotime('-1 day'));
+        }
+
+        $pp = $pdo->prepare("
+            SELECT pp_id
+            FROM tbl_production_planning
+            WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
+        ");
+        $pp->execute([$product, $shift, $line, $planningDate]);
+        $ppRow = $pp->fetch(PDO::FETCH_ASSOC);
+
+        if ($ppRow) {
+
+            // 🔥 ambil start shift
+            $shiftData = $pdo->prepare("
+                SELECT start
+                FROM tbl_shift
+                WHERE shift=?
+            ");
+            $shiftData->execute([$shift]);
+            $shiftRow = $shiftData->fetch(PDO::FETCH_ASSOC);
+
+            $shiftStart = intval($shiftRow['start'] ?? 0);
+
+            $remaining = $qty;
+
+            $slots = $pdo->prepare("
+                SELECT id, qty, actual, jam
+                FROM tbl_detail_production_planning
+                WHERE pp_id=?
+                ORDER BY
+                CASE
+                    WHEN jam='OT' THEN 99
+                    WHEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) < ?
+                        THEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) + 24
+                    ELSE CAST(SUBSTRING(jam,1,2) AS UNSIGNED)
+                END ASC
+            ");
+
+            $slots->execute([$ppRow['pp_id'], $shiftStart]);
+
+            foreach ($slots as $slot) {
+
+                if ($remaining <= 0) break;
+
+                $capacity = $slot['qty'] - $slot['actual'];
+
+                if ($capacity <= 0) continue;
+
+                $take = min($capacity, $remaining);
+
+                $pdo->prepare("
+                    UPDATE tbl_detail_production_planning
+                    SET actual = actual + ?
+                    WHERE id=?
+                ")->execute([$take, $slot['id']]);
+
+                $remaining -= $take;
+            }
+        }
+
+        /* =========================
+           UPDATE STATUS
+        ========================= */
+
+        $pdo->prepare("
+            UPDATE tbl_detail_product
+            SET is_ng=0
+            WHERE serial_no=?
+        ")->execute([$serial]);
+
+        $pdo->prepare("
+            UPDATE tbl_ng_product
+            SET status='IN_MECA'
+            WHERE serial_no=?
+        ")->execute([$serial]);
+
+        $pdo->commit();
+
+        echo json_encode([
+            'success' => true,
+            'message' => 'IN MECA berhasil'
+        ]);
+    } catch (Exception $e) {
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
+    }
+
+    exit;
+}
+
+/* =====================================
+   LOAD NG TYPE
+===================================== */
+
+if ($action == 'get_ng_type') {
+
+    $q = $pdo->query("
+        SELECT ng_code,ng_name
+        FROM tbl_ng_type
+        WHERE status='ACTIVE'
+        ORDER BY ng_name
+    ");
+
+    echo json_encode($q->fetchAll(PDO::FETCH_ASSOC));
+    exit;
+}
+
+/* =====================================================
+   REMOVE ACTIVE MATERIAL
+===================================================== */
+
+if ($action == 'remove_active_material') {
+
+    $part = $_POST['part'] ?? '';
+    $lot  = $_POST['lot'] ?? '';
+    $ref = $_POST['ref'] ?? '';
+    $line = $_POST['line'] ?? 0;
+
+    $operator = $_SESSION['username'] ?? 'operator';
+
+    try {
+
+        $pdo->beginTransaction();
+
+        $q = $pdo->prepare("
+        SELECT *
+        FROM tbl_active_material
+        WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+        LIMIT 1
+        ");
+
+        $q->execute([$part, $lot, $line, $ref]);
+
+        $row = $q->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            throw new Exception("Material tidak ditemukan");
+        }
+
+        $remain = intval($row['remain']);
+
+
+
+        $pdo->prepare("
+        DELETE FROM tbl_active_material
+        WHERE id=?
+        ")->execute([$row['id']]);
+
+        $pdo->commit();
+
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
+    }
+
+    exit;
+}
+
+/* =====================================================
+   ADJUST MATERIAL
+===================================================== */
+
+if ($action == 'adjust_material') {
+
+    $part = $_POST['part'] ?? '';
+    $lot  = $_POST['lot'] ?? '';
+    $ref  = $_POST['ref'] ?? '';
+    $line = $_POST['line'] ?? 0;
+
+    $type = $_POST['type'] ?? '';
+    $qty  = intval($_POST['qty'] ?? 0);
+
+    $operator = $_SESSION['username'] ?? 'operator';
+
+    if (!$part || !$lot || !$ref) {
+        echo json_encode(['error' => true, 'message' => 'Part atau Lot kosong']);
+        exit;
+    }
+
+    if ($qty <= 0) {
+        echo json_encode(['error' => true, 'message' => 'Qty tidak valid']);
+        exit;
+    }
+
+    try {
+
+        $pdo->beginTransaction();
+
+        $q = $pdo->prepare("
+        SELECT *
+        FROM tbl_active_material
+        WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+        LIMIT 1
+        ");
+
+        $q->execute([$part, $lot, $line, $ref]);
+        $row = $q->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            throw new Exception("Material tidak ditemukan");
+        }
+
+        $remain = intval($row['remain']);
+
+        if ($type == 'ADD') {
+
+            $pdo->prepare("
+            UPDATE tbl_active_material
+            SET remain = remain + ?
+            WHERE id=?
+            ")->execute([$qty, $row['id']]);
+
+            /* INCOMING IKUT NAIK */
+
+            $pdo->prepare("
+            UPDATE tbl_detail_part
+            SET remain = remain + ?
+            WHERE lot_no=?
+            ")->execute([$qty, $lot]);
+        }
+
+        if ($type == 'SUB') {
+
+            if ($qty > $remain) {
+                throw new Exception("Qty melebihi remain material");
+            }
+
+            $pdo->prepare("
+            UPDATE tbl_active_material
+            SET remain = remain - ?
+            WHERE id=?
+            ")->execute([$qty, $row['id']]);
+
+            /* INCOMING IKUT TURUN */
+
+            $pdo->prepare("
+            UPDATE tbl_detail_part
+            SET remain = remain - ?
+            WHERE lot_no=?
+            ")->execute([$qty, $lot]);
+        }
+
+        $pdo->prepare("
+        INSERT INTO tbl_material_loss
+        (part_code,lost_qty,old_remain,operator,reason,assy,ref_number,shift,line_id)
+        VALUES (?,?,?,?,?,?,?,?,?)
+        ")->execute([
+            $part,
+            $qty,
+            $remain,
+            $operator,
+            'ADJUST ' . $type,
+            '',
+            $row['ref_number'],
+            0,
+            $line
+        ]);
+
+        $pdo->commit();
+
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
+    }
+
+    exit;
+}
+
+/* =====================================================
+   MATERIAL NG
+===================================================== */
+if ($action == 'material_ng') {
+
+    $part   = $_POST['part'] ?? '';
+    $lot    = $_POST['lot'] ?? '';
+    $ref    = $_POST['ref'] ?? '';
+    $line   = $_POST['line'] ?? 0;
+    $shift  = $_POST['shift'] ?? 0;
+
+    $qty    = intval($_POST['qty'] ?? 0);
+    $reason = $_POST['reason'] ?? 'NG';
+
+    $operator = $_SESSION['username'] ?? 'operator';
+
+    if ($qty <= 0) {
+        echo json_encode(['error' => true, 'message' => 'Qty tidak valid']);
+        exit;
+    }
+
+    try {
+
+        $pdo->beginTransaction();
+
+        // =========================
+        // CEK MATERIAL AKTIF
+        // =========================
+        $q = $pdo->prepare("
+            SELECT *
+            FROM tbl_active_material
+            WHERE part_code=? AND lot_no=? AND line_id=? AND ref_number=?
+            LIMIT 1
+        ");
+
+        $q->execute([$part, $lot, $line, $ref]);
+        $row = $q->fetch(PDO::FETCH_ASSOC);
+
+        if (!$row) {
+            throw new Exception("Material tidak ditemukan");
+        }
+
+        if ($qty > $row['remain']) {
+            throw new Exception("NG qty melebihi remain");
+        }
+
+        // =========================
+        // INSERT KE tbl_ng_part
+        // =========================
+        $pdo->prepare("
+            INSERT INTO tbl_ng_part
+            (ng_id, part_code, lot_no, used_qty, ng_qty, ng_type, ref_part, created_at)
+            VALUES (0, ?, ?, ?, ?, ?, ?, NOW())
+        ")->execute([
+            $part,
+            $lot,
+            0,
+            $qty,
+            $reason,
+            $ref
+        ]);
+
+        // =========================
+        // UPDATE ACTIVE MATERIAL
+        // =========================
+        $pdo->prepare("
+            UPDATE tbl_active_material
+            SET remain = remain - ?
+            WHERE id=?
+        ")->execute([$qty, $row['id']]);
+
+        // =========================
+        // UPDATE INCOMING
+        // =========================
+        $pdo->prepare("
+            UPDATE tbl_detail_part
+            SET remain = remain - ?
+            WHERE ref_number=?
+        ")->execute([$qty, $ref]);
+
+        $pdo->commit();
+
+        echo json_encode(['success' => true]);
+    } catch (Exception $e) {
+
+        $pdo->rollBack();
+
+        echo json_encode([
+            'error' => true,
+            'message' => $e->getMessage()
+        ]);
+    }
+
     exit;
 }
