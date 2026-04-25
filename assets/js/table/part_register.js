@@ -64,7 +64,7 @@ var KTDatatableLocalSortDemo = function () {
                                class="btn btn-sm btn-warning btn-icon mr-2">
                                 <i class="flaticon-edit"></i>
                             </a>
-                            <a onclick="confirmDeleteTemplate('${row.part_code}', 'controllers/part_register/delete.php')"
+                            <a onclick="confirmDeleteTemplate('${row.id_part}', 'controllers/part_register/delete.php')"
                                class="btn btn-sm btn-danger btn-icon">
                                 <i class="flaticon-delete"></i>
                             </a>

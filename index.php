@@ -183,7 +183,7 @@ require __DIR__ . "/controllers/login.php";
 
     <?php
         // ADMIN
-        elseif ($_SESSION['rule'] === 'admin'):
+        elseif ($_SESSION['rule'] !== 'line' || $_SESSION['rule'] !== 'operator'):
             echo "<script>location='pages/dashboard.php'</script>";
         endif;
 

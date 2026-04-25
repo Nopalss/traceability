@@ -5,8 +5,9 @@ require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';
 require __DIR__ . '/../../includes/navbar.php';
 
-$_SESSION['menu'] = 'traceability';
+$_SESSION['menu'] = 'material_traceability';
 
+$_SESSION['halaman'] = 'material traceability';
 $lot = $_GET['lot'] ?? '';
 
 $data = [];

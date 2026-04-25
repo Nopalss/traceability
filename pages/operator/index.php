@@ -93,6 +93,25 @@ function jamLabel($jam)
         cursor: pointer;
     }
 
+    .aksi {
+        position: relative;
+    }
+
+    #btnExitAll {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        margin-left: 1px;
+        cursor: pointer;
+        background-color: #fa5252;
+        position: absolute;
+        top: 0;
+        right: 0;
+        color: white;
+
+    }
+
+
     .btnNgLot {
         background-color: #fa5252;
 
@@ -296,11 +315,8 @@ function jamLabel($jam)
                                     IN MECA
                                 </button>
                             </div>
-
                         </div>
-
                         <div class="col-md">
-
                             <div class="summary">
                                 <div class="plan">PLANNING<br><span id="sumPlan">0</span></div>
                                 <div class="actual">ACTUAL<br><span id="sumActual">0</span></div>
@@ -347,7 +363,11 @@ function jamLabel($jam)
                                     <th style="font-size: 0.885rem; padding-block: 3px; width:25%">LOT</th>
                                     <th style="font-size: 0.885rem; padding-block: 3px; width:20px">SPQ</th>
                                     <th style="font-size: 0.885rem; padding-block: 3px; width:20px">REMAIN</th>
-                                    <th style="font-size: 0.885rem; padding-block: 3px; width:80px">ACTION</th>
+                                    <th style="font-size: 0.885rem; padding-block: 3px; width:80px" class="aksi">ACTION
+                                        <div id='btnExitAll'>
+                                            X
+                                        </div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="materialBody">
@@ -2011,6 +2031,45 @@ data-index="${i}">
 
     }
 
+    $(document).on('click', '#btnExitAll', function() {
+        console.log(activeShift)
+        Swal.fire({
+
+            title: 'Close Material',
+            text: `Yakin ingin Close semua material?`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'YES CLOSE'
+
+        }).then(res => {
+
+            if (!res.isConfirmed) return
+
+            $.post('ajax_operator.php', {
+
+                action: 'remove_active_material_all',
+                line: lineId
+
+            }, function(res) {
+
+                let r = JSON.parse(res)
+
+                if (r.error) {
+
+                    Swal.fire('Error', r.message, 'error')
+                    return
+
+                }
+
+                Swal.fire('Success', 'Lot berhasil diclose', 'success')
+
+                reloadMaterial()
+
+            })
+
+        })
+
+    });
     $(document).on('click', '.btnRemoveLot', function() {
 
         let part = $(this).data('part')
@@ -2020,10 +2079,10 @@ data-index="${i}">
         Swal.fire({
 
             title: 'Close Material',
-            text: `Yakin ingin menghapus lot ${lot}?`,
+            text: `Yakin ingin Close lot ${lot}?`,
             icon: 'warning',
             showCancelButton: true,
-            confirmButtonText: 'YES REMOVE'
+            confirmButtonText: 'YES CLOSE'
 
         }).then(res => {
 
@@ -2048,7 +2107,7 @@ data-index="${i}">
 
                 }
 
-                Swal.fire('Success', 'Lot berhasil dihapus', 'success')
+                Swal.fire('Success', 'Lot berhasil diclose', 'success')
 
                 reloadMaterial()
 
@@ -2115,10 +2174,20 @@ class="swal2-input">
                 ref: ref,
                 type: d.type,
                 qty: d.qty,
-                line: lineId
+                line: lineId,
+                shift: activeShift
 
             }, function(res) {
 
+                let r = JSON.parse(res)
+
+                if (r.error) {
+
+                    Swal.fire('Error', r.message, 'error')
+                    return
+
+                }
+                Swal.fire('Success', r.message, 'success')
                 reloadMaterial()
 
             })
@@ -2198,6 +2267,15 @@ class="swal2-input">
 
             }, function(res) {
 
+                let r = JSON.parse(res)
+
+                if (r.error) {
+
+                    Swal.fire('Error', r.message, 'error')
+                    return
+
+                }
+                Swal.fire('Success', r.message, 'success')
                 reloadMaterial()
 
             })

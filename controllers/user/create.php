@@ -11,31 +11,24 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 // ================================
 // Ambil & Sanitasi Input
 // ================================
+
 $nip      = sanitize($_POST['nip'] ?? '');
 $nama     = sanitize($_POST['nama'] ?? '');
-$no_hp    = sanitize($_POST['no_hp'] ?? '');
-$role     = sanitize($_POST['role'] ?? '');
+$role_id = (int) ($_POST['role'] ?? 0);
 $username = sanitize($_POST['username'] ?? '');
 $password = $_POST['password'] ?? '';
 
 // ================================
-// Validasi Awal
+// Validasi
 // ================================
 if (
     $nip === '' ||
     $nama === '' ||
-    $no_hp === '' ||
-    $role === '' ||
+    $role_id === '' ||
     $username === '' ||
     $password === ''
 ) {
-    setAlert(
-        'error',
-        'Oops!',
-        'Semua field wajib diisi.',
-        'danger',
-        'Coba Lagi'
-    );
+    setAlert('error', 'Oops!', 'Semua field wajib diisi.', 'danger', 'Coba Lagi');
     redirect('pages/user/create.php');
 }
 
@@ -44,45 +37,52 @@ try {
     $pdo->beginTransaction();
 
     // ================================
-    // Cek NIP sudah ada?
+    // Cek NIP
     // ================================
-    $cekNip = $pdo->prepare(
-        "SELECT COUNT(*) FROM tbl_karyawan WHERE nip = :nip"
-    );
-    $cekNip->execute([':nip' => $nip]);
+    $cekNip = $pdo->prepare("SELECT COUNT(*) FROM tbl_karyawan WHERE nip = ?");
+    $cekNip->execute([$nip]);
 
     if ($cekNip->fetchColumn() > 0) {
         throw new Exception('NIP sudah terdaftar.');
     }
 
     // ================================
-    // Cek Username sudah ada?
+    // Cek Username
     // ================================
-    $cekUser = $pdo->prepare(
-        "SELECT COUNT(*) FROM tbl_user WHERE username = :username"
-    );
-    $cekUser->execute([':username' => $username]);
+    $cekUser = $pdo->prepare("SELECT COUNT(*) FROM tbl_user WHERE username = ?");
+    $cekUser->execute([$username]);
 
     if ($cekUser->fetchColumn() > 0) {
         throw new Exception('Username sudah digunakan.');
     }
 
     // ================================
-    // Insert ke tbl_karyawan
+    // Ambil Role
     // ================================
-    $insertKaryawan = $pdo->prepare(
-        "INSERT INTO tbl_karyawan 
-        (nip, nama, no_hp, role, username)
-        VALUES
-        (:nip, :nama, :no_hp, :role, :username)"
-    );
+    $stmt = $pdo->prepare("SELECT * FROM tbl_role WHERE role_id = ?");
+    $stmt->execute([$role_id]);
+    $roleData = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$roleData) {
+        throw new Exception("Role tidak ditemukan.");
+    }
+
+    $role_name = strtolower($roleData['role_name']);
+
+    // ================================
+    // Insert tbl_karyawan
+    // ================================
+    $insertKaryawan = $pdo->prepare("
+        INSERT INTO tbl_karyawan 
+        (nip, nama, role, username)
+        VALUES (?, ?, ?, ?)
+    ");
 
     $insertKaryawan->execute([
-        ':nip'      => $nip,
-        ':nama'     => $nama,
-        ':no_hp'    => $no_hp,
-        ':role'     => $role,
-        ':username' => $username
+        $nip,
+        $nama,
+        $role_name,
+        $username
     ]);
 
     // ================================
@@ -91,19 +91,19 @@ try {
     $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
 
     // ================================
-    // Insert ke tbl_user
+    // Insert tbl_user
     // ================================
-    $insertUser = $pdo->prepare(
-        "INSERT INTO tbl_user
-        (username, password, rule)
-        VALUES
-        (:username, :password, :rule)"
-    );
+    $insertUser = $pdo->prepare("
+        INSERT INTO tbl_user
+        (username, password, role, role_id)
+        VALUES (?, ?, ?, ?)
+    ");
 
     $insertUser->execute([
-        ':username' => $username,
-        ':password' => $hashedPassword,
-        ':rule'     => $role
+        $username,
+        $hashedPassword,
+        $role_name,
+        $role_id
     ]);
 
     $pdo->commit();
@@ -123,8 +123,5 @@ try {
         $pdo->rollBack();
     }
 
-    handlePdoError(
-        $e,
-        'pages/user/create.php'
-    );
+    handlePdoError($e, 'pages/user/create.php');
 }

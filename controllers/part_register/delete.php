@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         // --- Cek part exist ---
         $stmt = $pdo->prepare(
-            "SELECT part_code FROM tbl_part WHERE part_code = :part_code LIMIT 1"
+            "SELECT part_code FROM tbl_part WHERE id_part = :part_code LIMIT 1"
         );
         $stmt->execute([':part_code' => $part_code]);
         $part = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -53,7 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
 
         $stmt = $pdo->prepare(
-            "DELETE FROM tbl_part WHERE part_code = :part_code"
+            "DELETE FROM tbl_part WHERE id_part = :part_code"
         );
         $stmt->execute([':part_code' => $part_code]);
 

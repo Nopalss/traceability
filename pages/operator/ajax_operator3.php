@@ -422,7 +422,7 @@ if ($action == 'scan_product') {
     }
 
     $planningDate = date('Y-m-d');
-    if ($shift == 3 && date('H') < 7) {
+    if ($shift == 2 && date('H') < 7) {
         $planningDate = date('Y-m-d', strtotime('-1 day'));
     }
 
@@ -462,71 +462,47 @@ if ($action == 'scan_product') {
             }
         }
 
-        /* ================= BOM FIX FINAL ================= */
+        /* ================= BOM FIX (NO GROUP BY!) ================= */
         $bom = $pdo->prepare("
             SELECT 
-                pm.part_id,
-                pm.part_code,
-                pm.type,
-                pa.qty
+                pa.part_id,
+                pa.part_code,
+                pa.qty,
+                pa.remark,
+                pa.subs
             FROM tbl_pp_material pm
-            JOIN tbl_part_assy pa 
-                ON pa.part_id = pm.part_id 
-                AND pa.part_assy = ?
+            JOIN tbl_part_assy pa ON pa.part_id = pm.part_id
             WHERE pm.pp_id = (
                 SELECT pp_id FROM tbl_production_planning
                 WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
                 LIMIT 1
             )
+            ORDER BY pa.remark ASC
         ");
 
-        $bom->execute([$product, $product, $shift, $line, $planningDate]);
+        $bom->execute([$product, $shift, $line, $planningDate]);
         $bomRows = $bom->fetchAll(PDO::FETCH_ASSOC);
 
-        if (empty($bomRows)) {
-            throw new Exception("BOM tidak ditemukan");
-        }
-
-        /* ================= GROUPING ================= */
-        $grouped = [];
+        $processed = [];
 
         foreach ($bomRows as $b) {
 
-            $code = $b['part_code'];
+            // 🔥 prevent double berdasarkan PART CODE (bukan part_id)
+            if (isset($processed[$b['part_code']])) continue;
+            $processed[$b['part_code']] = true;
 
-            if (!isset($grouped[$code])) {
-                $grouped[$code] = [
-                    'main' => null,
-                    'subs' => []
-                ];
-            }
+            $mainPartCode = $b['part_code'];
+            $need = intval($b['qty']) * $qty;
 
-            if ($b['type'] == 'MAIN') {
-                if (!$grouped[$code]['main']) {
-                    $grouped[$code]['main'] = $b;
-                }
-            } else {
-                $grouped[$code]['subs'][] = $b;
-            }
-        }
-
-        /* ================= PROCESS MATERIAL ================= */
-        foreach ($grouped as $code => $g) {
-
-            if (!$g['main']) {
-                throw new Exception("MAIN tidak ditemukan untuk $code");
-            }
-
-            $need = intval($g['main']['qty']) * $qty;
             $usageAll = [];
 
-            /* ===== MAIN FIFO ===== */
+            /* ================= MAIN ================= */
             $lots = $pdo->prepare("
                 SELECT * FROM tbl_active_material
-                WHERE part_code=? AND line_id=? AND remain>0
+                WHERE part_code=? AND part_id=? AND line_id=? AND remain>0
                 ORDER BY id ASC
             ");
-            $lots->execute([$code, $line]);
+            $lots->execute([$mainPartCode, $b['part_id'], $line]);
 
             foreach ($lots as $lot) {
 
@@ -535,7 +511,8 @@ if ($action == 'scan_product') {
                 $take = min($lot['remain'], $need);
 
                 $usageAll[] = [
-                    'part_code' => $code,
+                    'part_code' => $mainPartCode,
+                    'part_id' => $lot['part_id'],
                     'lot_no' => $lot['lot_no'],
                     'ref' => $lot['ref_number'],
                     'qty' => $take,
@@ -545,17 +522,24 @@ if ($action == 'scan_product') {
                 $need -= $take;
             }
 
-            /* ===== SUBSTITUTE ===== */
-            if ($need > 0) {
+            /* ================= SUBSTITUTE ================= */
+            if ($need > 0 && $b['remark'] == 0) {
 
-                foreach ($g['subs'] as $s) {
+                $subs = $pdo->prepare("
+                    SELECT part_code, part_id 
+                    FROM tbl_part_assy
+                    WHERE subs=? AND remark=1
+                ");
+                $subs->execute([$b['part_id']]);
+
+                foreach ($subs as $s) {
 
                     $lots = $pdo->prepare("
                         SELECT * FROM tbl_active_material
-                        WHERE part_code=? AND line_id=? AND remain>0
+                        WHERE part_code=? AND part_id=? AND line_id=? AND remain>0
                         ORDER BY id ASC
                     ");
-                    $lots->execute([$s['part_code'], $line]);
+                    $lots->execute([$s['part_code'], $s['part_id'], $line]);
 
                     foreach ($lots as $lot) {
 
@@ -565,6 +549,7 @@ if ($action == 'scan_product') {
 
                         $usageAll[] = [
                             'part_code' => $s['part_code'],
+                            'part_id' => $s['part_id'],
                             'lot_no' => $lot['lot_no'],
                             'ref' => $lot['ref_number'],
                             'qty' => $take,
@@ -576,17 +561,14 @@ if ($action == 'scan_product') {
                 }
             }
 
-            if (empty($usageAll)) {
-                throw new Exception("Material tidak keambil");
-            }
-
             if ($need > 0) {
-                throw new Exception("Material tidak cukup");
+                throw new Exception("Material tidak cukup (MAIN + SUB)");
             }
 
-            /* ===== EXECUTE ===== */
+            /* ================= EXECUTE ================= */
             foreach ($usageAll as $u) {
 
+                // TRACE
                 $pdo->prepare("
                     INSERT INTO tbl_detail_production
                     (product_code,serial_no,part_code,used_qty,lot_no,ref_number,ref_product)
@@ -601,6 +583,7 @@ if ($action == 'scan_product') {
                     $ref
                 ]);
 
+                // ACTIVE MATERIAL
                 $pdo->prepare("
                     UPDATE tbl_active_material
                     SET remain = remain - ?
@@ -613,24 +596,30 @@ if ($action == 'scan_product') {
                     WHERE id=? AND remain<=0
                 ")->execute([$u['id']]);
 
+                // DETAIL PART (FIXED)
                 $pdo->prepare("
                     UPDATE tbl_detail_part
                     SET remain = remain - ?
                     WHERE ref_number=? AND part_code=?
                 ")->execute([$u['qty'], $u['ref'], $u['part_code']]);
+
+                $pdo->prepare("
+                    UPDATE tbl_detail_part
+                    SET status='USED'
+                    WHERE ref_number=? AND part_code=? AND remain<=0
+                ")->execute([$u['ref'], $u['part_code']]);
             }
         }
-
         /* =========================
-//            UPDATE PLANNING
-//         ========================== */
+           UPDATE PLANNING
+        ========================== */
 
         $pp = $pdo->prepare("
-                    SELECT pp_id
-                    FROM tbl_production_planning
-                    WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
-                    LIMIT 1
-                ");
+            SELECT pp_id
+            FROM tbl_production_planning
+            WHERE product_code=? AND shift=? AND line_id=? AND production_date=?
+            LIMIT 1
+        ");
 
         $pp->execute([$product, $shift, $line, $planningDate]);
 
@@ -639,26 +628,26 @@ if ($action == 'scan_product') {
         if ($ppRow) {
 
             $shiftStartStmt = $pdo->prepare("
-            SELECT start 
-            FROM tbl_shift 
-            WHERE shift=? 
-            LIMIT 1
-        ");
+    SELECT start 
+    FROM tbl_shift 
+    WHERE shift=? 
+    LIMIT 1
+");
             $shiftStartStmt->execute([$shift]);
             $shiftStart = $shiftStartStmt->fetchColumn();
 
             $slots = $pdo->prepare("
-            SELECT id, qty, actual, jam
-            FROM tbl_detail_production_planning
-            WHERE pp_id=?
-            ORDER BY
-            CASE
-                WHEN jam='OT' THEN 99
-                WHEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) < ?
-                    THEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) + 24
-                ELSE CAST(SUBSTRING(jam,1,2) AS UNSIGNED)
-            END
-        ");
+    SELECT id, qty, actual, jam
+    FROM tbl_detail_production_planning
+    WHERE pp_id=?
+    ORDER BY
+    CASE
+        WHEN jam='OT' THEN 99
+        WHEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) < ?
+            THEN CAST(SUBSTRING(jam,1,2) AS UNSIGNED) + 24
+        ELSE CAST(SUBSTRING(jam,1,2) AS UNSIGNED)
+    END
+");
 
             $slots->execute([$ppRow['pp_id'], $shiftStart]);
 
@@ -677,10 +666,10 @@ if ($action == 'scan_product') {
                 $take = min($capacity, $remaining);
 
                 $pdo->prepare("
-                UPDATE tbl_detail_production_planning
-                SET actual = actual + ?
-                WHERE id=?
-            ")->execute([$take, $slot['id']]);
+        UPDATE tbl_detail_production_planning
+        SET actual = actual + ?
+        WHERE id=?
+    ")->execute([$take, $slot['id']]);
 
                 $remaining -= $take;
             }
@@ -692,16 +681,16 @@ if ($action == 'scan_product') {
 
 
         $cekFinish = $pdo->prepare("
-        SELECT 
-            SUM(dp.qty) AS total_plan,
-            SUM(dp.actual) AS total_actual
-        FROM tbl_production_planning pp
-        JOIN tbl_detail_production_planning dp ON pp.pp_id = dp.pp_id
-        WHERE pp.product_code=? 
-          AND pp.shift=? 
-          AND pp.line_id=? 
-          AND pp.production_date=?
-        ");
+SELECT 
+    SUM(dp.qty) AS total_plan,
+    SUM(dp.actual) AS total_actual
+FROM tbl_production_planning pp
+JOIN tbl_detail_production_planning dp ON pp.pp_id = dp.pp_id
+WHERE pp.product_code=? 
+  AND pp.shift=? 
+  AND pp.line_id=? 
+  AND pp.production_date=?
+");
 
 
         $cekFinish->execute([$product, $shift, $line, $planningDate]);
@@ -713,14 +702,12 @@ if ($action == 'scan_product') {
             $isFinished = true;
         }
 
-        /* ================= COMMIT ================= */
         $pdo->commit();
 
         echo json_encode(['success' => true]);
     } catch (Exception $e) {
 
         $pdo->rollBack();
-
 
         echo json_encode([
             'error' => true,
@@ -730,6 +717,8 @@ if ($action == 'scan_product') {
 
     exit;
 }
+
+
 /* =====================================================
    OUTPUT
 ===================================================== */
@@ -1936,7 +1925,7 @@ if ($action == 'adjust_material') {
 
         $pdo->commit();
 
-        echo json_encode(['success' => true, 'message' => "Material Berhasil Di Adjust"]);
+        echo json_encode(['success' => true, 'shift' => $shift]);
     } catch (Exception $e) {
 
         $pdo->rollBack();
@@ -2032,7 +2021,7 @@ if ($action == 'material_ng') {
 
         $pdo->commit();
 
-        echo json_encode(['success' => true, 'message' => "Material NG Berhasil Di simpan"]);
+        echo json_encode(['success' => true]);
     } catch (Exception $e) {
 
         $pdo->rollBack();

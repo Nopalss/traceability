@@ -3,7 +3,6 @@ require_once __DIR__ . '/../../includes/config.php';
 
 $action = $_GET['action'] ?? '';
 
-
 if ($action == 'load_report') {
 
     $line = $_GET['line'] ?? '';
@@ -85,85 +84,88 @@ if ($action == 'load_report') {
     ]);
 }
 
-/* =====================================================
-   SUMMARY (NG TYPE + LOSS + OVER)
-===================================================== */
 if ($action == 'summary') {
 
-    $part = $_GET['part'] ?? '';
-    $from = $_GET['from'] ?? '';
-    $to   = $_GET['to'] ?? '';
+    $page = intval($_GET['page'] ?? 1);
+    $search = $_GET['search'] ?? '';
 
-    $whereDateNG = "";
-    $whereDateLoss = "";
+    $limit = 10;
+    $offset = ($page - 1) * $limit;
 
-    if ($from && $to) {
-        $whereDateNG = "AND DATE(ng.created_at) BETWEEN '$from' AND '$to'";
-        $whereDateLoss = "AND DATE(ml.created_at) BETWEEN '$from' AND '$to'";
+    $where = "";
+
+    if ($search != '') {
+        $where = "WHERE p.part_name LIKE '%$search%' 
+                  OR s.name_supplier LIKE '%$search%'
+                  OR p.part_code LIKE '%$search%'";
     }
 
-    /* ================= NG BY TYPE ================= */
-    $ng = $pdo->query("
+    $data = $pdo->query("
         SELECT 
-            t.ng_name,
-            SUM(ng.ng_qty) as qty
-        FROM tbl_ng_part ng
-        LEFT JOIN tbl_ng_type t ON t.id = ng.ng_type
-        WHERE ng.part_code = '$part'
-        $whereDateNG
-        GROUP BY ng.ng_type
-        ORDER BY qty DESC
+            p.part_code,
+            p.part_name,
+            s.name_supplier,
+
+            COALESCE(ng.total_ng,0) as total_ng,
+            COALESCE(ls.total_loss,0) as total_loss
+
+        FROM tbl_part p
+        LEFT JOIN tbl_supplier s ON s.id_supplier = p.supplier
+
+        LEFT JOIN (
+            SELECT part_code, SUM(ng_qty) total_ng
+            FROM tbl_ng_part
+            GROUP BY part_code
+        ) ng ON ng.part_code = p.part_code
+
+        LEFT JOIN (
+            SELECT part_code, SUM(lost_qty) total_loss
+            FROM tbl_material_loss
+            GROUP BY part_code
+        ) ls ON ls.part_code = p.part_code
+
+        $where
+
+        ORDER BY (COALESCE(ng.total_ng,0) + COALESCE(ls.total_loss,0)) DESC
+
+        LIMIT $limit OFFSET $offset
     ")->fetchAll(PDO::FETCH_ASSOC);
 
-    /* ================= LOSS ================= */
-    $loss = $pdo->query("
-        SELECT SUM(lost_qty) as total
-        FROM tbl_material_loss ml
-        WHERE ml.part_code = '$part'
-        AND ml.reason LIKE '%SUB%'
-        $whereDateLoss
-    ")->fetch()['total'] ?? 0;
-
-    /* ================= OVER ================= */
-    $over = $pdo->query("
-        SELECT SUM(lost_qty) as total
-        FROM tbl_material_loss ml
-        WHERE ml.part_code = '$part'
-        AND ml.reason LIKE '%ADD%'
-        $whereDateLoss
-    ")->fetch()['total'] ?? 0;
+    $total = $pdo->query("SELECT COUNT(*) as total FROM tbl_part")->fetch()['total'];
 
     echo json_encode([
-        'ng_detail' => $ng,
-        'total_loss' => (int)$loss,
-        'total_over' => (int)$over
+        'data' => $data,
+        'total' => $total,
+        'start' => $offset + 1,
+        'end' => $offset + count($data)
     ]);
 }
-
-
-/* =====================================================
-   DETAIL (TABLE)
-===================================================== */
 if ($action == 'detail') {
 
     $part = $_GET['part'];
     $page = intval($_GET['page'] ?? 1);
-    $from = $_GET['from'] ?? '';
-    $to   = $_GET['to'] ?? '';
+    $date = $_GET['date'] ?? '';
     $type = $_GET['type'] ?? 'all';
+    $search = $_GET['search'] ?? '';
 
     $limit = 10;
     $offset = ($page - 1) * $limit;
 
     $data = [];
 
-    /* ================= NG ================= */
+    // ================= NG =================
     if ($type == 'all' || $type == 'ng') {
 
         $where = "WHERE dp.part_code = '$part'";
 
-        if ($from && $to) {
-            $where .= " AND DATE(ng.created_at) BETWEEN '$from' AND '$to'";
+        if ($date != '') {
+            $where .= " AND DATE(ng.created_at) = '$date'";
+        }
+
+        if ($search != '') {
+            $where .= " AND (ng.ref_part LIKE '%$search%' 
+                         OR dp.lot_no LIKE '%$search%' 
+                         OR ng.ng_type LIKE '%$search%')";
         }
 
         $ng = $pdo->query("
@@ -173,10 +175,9 @@ if ($action == 'detail') {
                 dp.lot_no as lot,
                 dp.incoming_date as income,
                 ng.ng_qty as qty,
-                t.ng_name as reason,
-                l.line_name,
-                am.line_id,
-                sh.shift as shift,
+                ng.ng_type as reason,
+                am.line_id as line,
+                l.line_name as line_name,
                 ng.created_at as date
             FROM tbl_ng_part ng
             LEFT JOIN tbl_detail_part dp 
@@ -185,23 +186,25 @@ if ($action == 'detail') {
                 ON am.ref_number = ng.ref_part
             LEFT JOIN tbl_line l 
                 ON l.line_id = am.line_id
-            LEFT JOIN tbl_shift sh 
-                ON sh.shift_id = ng.shift
-            LEFT JOIN tbl_ng_type t 
-                ON t.id = ng.ng_type
             $where
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $data = array_merge($data, $ng);
     }
 
-    /* ================= LOSS ================= */
+    // ================= LOSS =================
     if ($type == 'all' || $type == 'loss') {
 
         $where = "WHERE dp.part_code = '$part'";
 
-        if ($from && $to) {
-            $where .= " AND DATE(ml.created_at) BETWEEN '$from' AND '$to'";
+        if ($date != '') {
+            $where .= " AND DATE(ml.created_at) = '$date'";
+        }
+
+        if ($search != '') {
+            $where .= " AND (ml.ref_number LIKE '%$search%' 
+                         OR dp.lot_no LIKE '%$search%' 
+                         OR ml.reason LIKE '%$search%')";
         }
 
         $loss = $pdo->query("
@@ -212,24 +215,21 @@ if ($action == 'detail') {
                 dp.incoming_date as income,
                 ml.lost_qty as qty,
                 ml.reason,
-                l.line_name,
-                ml.line_id,
-                sh.shift as shift,
+                l.line_name as line_name,
+                ml.line_id as line,
                 ml.created_at as date
             FROM tbl_material_loss ml
             LEFT JOIN tbl_detail_part dp 
                 ON dp.ref_number = ml.ref_number
             LEFT JOIN tbl_line l 
                 ON l.line_id = ml.line_id
-            LEFT JOIN tbl_shift sh 
-                ON sh.shift_id = ml.shift
             $where
         ")->fetchAll(PDO::FETCH_ASSOC);
 
         $data = array_merge($data, $loss);
     }
 
-    /* ================= SORT ================= */
+    // SORT
     usort($data, function ($a, $b) {
         return strtotime($b['date']) - strtotime($a['date']);
     });

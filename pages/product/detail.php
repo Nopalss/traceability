@@ -2,7 +2,10 @@
 require_once __DIR__ . '/../../includes/config.php';
 
 $productCode = $_GET['product_code'] ?? '';
-
+$_SESSION['menu'] = 'product';
+$_SESSION['table'] = '';
+$_SESSION['halaman'] = 'product';
+$_SESSION['subHalaman'] = '';
 if ($productCode == '') {
     header('Location: index.php');
     exit;
@@ -71,10 +74,7 @@ foreach ($details as $row) {
     $grouped[$serial]['rows'][] = $row;
 }
 
-$totalProduced = count($grouped);
-
-$_SESSION['menu'] = 'stok_product';
-$_SESSION['halaman'] = 'detail product';
+$totalProduced = count($grouped);;
 
 require __DIR__ . '/../../includes/header.php';
 require __DIR__ . '/../../includes/aside.php';

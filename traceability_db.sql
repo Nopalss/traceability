@@ -3,7 +3,7 @@
 -- https://www.phpmyadmin.net/
 --
 -- Host: localhost:3306
--- Generation Time: Apr 15, 2026 at 07:11 AM
+-- Generation Time: Apr 19, 2026 at 11:29 PM
 -- Server version: 8.0.30
 -- PHP Version: 8.3.29
 
@@ -217,7 +217,9 @@ CREATE TABLE `tbl_ng_part` (
   `ng_type` text CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci,
   `reason` text COLLATE utf8mb4_general_ci,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP,
-  `ref_part` varchar(100) COLLATE utf8mb4_general_ci NOT NULL
+  `ref_part` varchar(100) COLLATE utf8mb4_general_ci NOT NULL,
+  `shift` int NOT NULL,
+  `line_id` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 -- --------------------------------------------------------
@@ -394,6 +396,15 @@ CREATE TABLE `tbl_shift` (
   `duration_bm` int NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+--
+-- Dumping data for table `tbl_shift`
+--
+
+INSERT INTO `tbl_shift` (`shift_id`, `shift`, `start`, `end`, `time_coffe`, `duration_time`, `break_makan`, `duration_bm`) VALUES
+(1, '1', 7, 15, 560, 10, 710, 50),
+(2, '2', 15, 23, 1030, 10, 1170, 50),
+(3, '3', 23, 7, 0, 0, 0, 0);
+
 -- --------------------------------------------------------
 
 --
@@ -447,7 +458,8 @@ INSERT INTO `tbl_user` (`user_id`, `username`, `password`, `rule`) VALUES
 (6, 'K01', '$2y$10$LTHmyWVVqIQoLrkNHqpVVuNVEsDEmuMLqT8W9wIliLyKZcMJ5PRwq', 'line'),
 (7, 'CL01', '$2y$10$N4wfBh/bRA9KHn3rM5XguOzYj8CdXjl9yR3yf/ftiaXVTs9vN.zny', 'line'),
 (8, 'operator3', '$2y$10$EoeZLYZs3BlrGo99OrRCoeQVbUbOY7lKqQ8Ro.qIdA.ddGX87fz0W', 'operator'),
-(10, 'A03', '$2y$10$plHkxUZ.nj18zF2ctLO84uwql9bJTmrU2KE6t6iwNTdo.fyvyQYkm', 'line');
+(10, 'A03', '$2y$10$plHkxUZ.nj18zF2ctLO84uwql9bJTmrU2KE6t6iwNTdo.fyvyQYkm', 'line'),
+(11, '1PAPAYA', '$2y$10$lP4PCyBBAEJqWQEmW7.1oOvI8Yzdj1iIgzdVekjxiuPAHBGoncbwa', 'line');
 
 --
 -- Indexes for dumped tables
@@ -756,7 +768,7 @@ ALTER TABLE `tbl_product_unit`
 -- AUTO_INCREMENT for table `tbl_shift`
 --
 ALTER TABLE `tbl_shift`
-  MODIFY `shift_id` int NOT NULL AUTO_INCREMENT;
+  MODIFY `shift_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=6;
 
 --
 -- AUTO_INCREMENT for table `tbl_supplier`
@@ -774,7 +786,7 @@ ALTER TABLE `tbl_unit_material`
 -- AUTO_INCREMENT for table `tbl_user`
 --
 ALTER TABLE `tbl_user`
-  MODIFY `user_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+  MODIFY `user_id` int NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
