@@ -118,10 +118,52 @@ require __DIR__ . '/../../includes/navbar.php';
 </div>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
-
 <script>
     const parts = <?= json_encode($parts); ?>;
     const bom = <?= json_encode($bom); ?>;
+
+    /* ======================
+       GET SELECTED PARTS
+    ====================== */
+    function getSelectedParts() {
+        let arr = [];
+        document.querySelectorAll('.part-select').forEach(s => {
+            if (s.value) arr.push(s.value);
+        });
+        return arr;
+    }
+
+    /* ======================
+       REFRESH OPTION (❌ DUPLICATE)
+    ====================== */
+    function refreshPartOptions() {
+
+        const used = getSelectedParts();
+
+        document.querySelectorAll('.part-select').forEach(select => {
+
+            [...select.options].forEach(opt => {
+                if (!opt.value) return;
+
+                let disabled = false;
+
+                if (used.includes(opt.value) && opt.value !== select.value) {
+                    disabled = true;
+                }
+
+                opt.disabled = disabled;
+
+                if (disabled) {
+                    opt.textContent = '❌ ' + opt.value;
+                    opt.style.color = '#dc3545';
+                } else {
+                    opt.textContent = opt.value;
+                    opt.style.color = '';
+                }
+            });
+
+        });
+    }
 
     /* ====================== */
     function fillSubsOptions() {
@@ -212,6 +254,7 @@ require __DIR__ . '/../../includes/navbar.php';
         renumber();
         fillSubsOptions();
         autoSetSubs();
+        refreshPartOptions(); // 🔥 penting
     }
 
     /* ====================== */
@@ -227,19 +270,25 @@ require __DIR__ . '/../../includes/navbar.php';
         renumber();
         fillSubsOptions();
         autoSetSubs();
+        refreshPartOptions(); // 🔥
     });
 
-    $(document).on("change", ".remark", autoSetSubs);
+    $(document).on("change", ".remark", function() {
+        autoSetSubs();
+    });
 
     $(document).on("change", ".part-select", function() {
         let s = $(this).find(":selected").text();
         $(this).closest("tr").find(".supplier").text(s.split('-').pop());
+
+        refreshPartOptions(); // 🔥 inti
         autoSetSubs();
     });
 
     $(document).on("click", ".del", function() {
         $(this).closest("tr").remove();
         renumber();
+        refreshPartOptions(); // 🔥
         autoSetSubs();
     });
 

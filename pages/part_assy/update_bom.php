@@ -37,7 +37,7 @@ try {
     if ($oldAssy !== $newAssy) {
 
         $check = $pdo->prepare("
-            SELECT COUNT(*) FROM tbl_part WHERE part_code = ?
+            SELECT COUNT(*) FROM tbl_model WHERE part_code = ?
         ");
         $check->execute([$newAssy]);
 
@@ -65,16 +65,7 @@ try {
     ")->execute([$newAssy, $assyName, $oldAssy]);
 
     /* =========================
-       5. UPDATE RELASI BOM
-    ========================== */
-    $pdo->prepare("
-        UPDATE tbl_part_assy 
-        SET part_assy = ?
-        WHERE part_assy = ?
-    ")->execute([$newAssy, $oldAssy]);
-
-    /* =========================
-       6. DELETE OLD BOM
+       5. DELETE OLD BOM (FIX)
     ========================== */
     $pdo->prepare("
         DELETE FROM tbl_part_assy WHERE part_assy = ?
@@ -107,6 +98,7 @@ try {
        INSERT NEW BOM
     ========================== */
     $used = [];
+    $mainParts = [];
 
     foreach ($items as $i) {
 
@@ -166,9 +158,13 @@ try {
         }
 
         /* =========================
-           HANDLE SUBS (FIX TOTAL)
+           HANDLE SUBS
         ========================== */
         $subs_id = 0;
+
+        if ($remark == 0) {
+            $mainParts[] = $part_id;
+        }
 
         if ($remark == 1) {
 
@@ -176,14 +172,15 @@ try {
                 throw new Exception("SUBSTITUTE harus punya parent");
             }
 
-            // 🔥 EXPLODE (INI WAJIB)
-            if (strpos($subs_val, '__') === false) {
-                throw new Exception("Format subs salah");
+            $partsSubs = explode("__", $subs_val);
+
+            if (count($partsSubs) !== 2) {
+                throw new Exception("Format subs tidak valid");
             }
 
-            list($subs_code, $subs_supplier_name) = explode("__", $subs_val);
+            [$subs_code, $subs_supplier_name] = $partsSubs;
 
-            // 🔥 GET SUPPLIER PARENT
+            // GET SUPPLIER SUBS
             $getSupplier->execute([
                 'name' => $subs_supplier_name
             ]);
@@ -194,7 +191,7 @@ try {
                 throw new Exception("Supplier subs tidak ditemukan: $subs_supplier_name");
             }
 
-            // 🔥 GET PART PARENT
+            // GET PART SUBS
             $getPart->execute([
                 'code' => $subs_code,
                 'supplier' => $subs_supplier_id
@@ -206,9 +203,14 @@ try {
                 throw new Exception("Subs tidak ditemukan: $subs_code - $subs_supplier_name");
             }
 
-            // 🔥 VALIDASI SELF (FULL IDENTITY)
+            // VALIDASI SELF
             if ($subs_id == $part_id) {
                 throw new Exception("Part tidak boleh menjadi substitute dirinya sendiri");
+            }
+
+            // VALIDASI PARENT EXIST
+            if (!in_array($subs_id, $mainParts)) {
+                throw new Exception("Parent MAIN belum ada sebelum SUBSTITUTE");
             }
         }
 
