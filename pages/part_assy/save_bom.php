@@ -25,26 +25,30 @@ try {
         throw new Exception("Model sudah terdaftar!");
     }
 
-    $pdo->prepare("
-        INSERT INTO tbl_model (name, part_code, created_by)
-        VALUES (?, ?, ?)
-    ")->execute([$model, $assyCode, $_SESSION['username'] ?? 'system']);
-
     // ================= PART ASSY =================
     $checkPart = $pdo->prepare("SELECT part_code FROM tbl_part WHERE part_code = ?");
     $checkPart->execute([$assyCode]);
 
+    if ($checkPart->rowCount() > 0) {
+        throw new Exception("Model sudah terdaftar!");
+    }
+
+    // ambil supplier STI
     $sti = $pdo->query("
         SELECT id_supplier FROM tbl_supplier 
         WHERE name_supplier = 'PT. STI' AND status = 'supplier'
     ")->fetchColumn();
 
-    if ($checkPart->rowCount() == 0) {
-        $pdo->prepare("
-            INSERT INTO tbl_part (part_code, part_name, supplier, status, status_assy)
-            VALUES (?, ?, ?, 'md', 1)
-        ")->execute([$assyCode, $assyName, $sti]);
+    if (!$sti) {
+        throw new Exception("Supplier STI tidak ditemukan");
     }
+
+
+    // ================= INSERT MODEL =================
+    $pdo->prepare("
+        INSERT INTO tbl_model (name, part_code, created_by)
+        VALUES (?, ?, ?)
+    ")->execute([$model, $assyCode, $_SESSION['username'] ?? 'system']);
 
     // ================= PREPARE =================
     $getSupplier = $pdo->prepare("
@@ -52,9 +56,21 @@ try {
         WHERE name_supplier = :name AND status = 'supplier'
     ");
 
+    // kalau assy belum ada → insert
+    if ($checkPart->rowCount() == 0) {
+        $pdo->prepare("
+            INSERT INTO tbl_part (part_code, part_name, supplier, status, status_assy)
+            VALUES (?, ?, ?, 'md', 1)
+        ")->execute([$assyCode, $assyName, $sti]);
+    }
+
     $getPart = $pdo->prepare("
         SELECT id_part FROM tbl_part 
         WHERE part_code = :code AND supplier = :supplier
+    ");
+
+    $checkPartGlobal = $pdo->prepare("
+        SELECT id_part FROM tbl_part WHERE part_code = ?
     ");
 
     $insert = $pdo->prepare("
@@ -73,7 +89,13 @@ try {
         $supplier_name = trim($item['supplier']);
         $subs_val  = trim($item['subs'] ?? '');
 
-        // --- supplier current ---
+        // 🔥 VALIDASI GLOBAL PART
+        $checkPartGlobal->execute([$part_code]);
+        if ($checkPartGlobal->rowCount() == 0) {
+            throw new Exception("Part belum terdaftar di master: $part_code");
+        }
+
+        // --- supplier ---
         $getSupplier->execute(['name' => $supplier_name]);
         $supplier_id = $getSupplier->fetchColumn();
 
@@ -81,7 +103,7 @@ try {
             throw new Exception("Supplier tidak ditemukan: $supplier_name");
         }
 
-        // --- part current ---
+        // --- part (specific supplier) ---
         $getPart->execute([
             'code' => $part_code,
             'supplier' => $supplier_id
@@ -90,10 +112,10 @@ try {
         $part_id = $getPart->fetchColumn();
 
         if (!$part_id) {
-            throw new Exception("Part tidak ditemukan: $part_code - $supplier_name");
+            throw new Exception("Part tidak ditemukan untuk supplier: $part_code - $supplier_name");
         }
 
-        // ================= SUBS FIX =================
+        // ================= SUBSTITUTE =================
         $subs_id = 0;
 
         if ($remark == 1) {
@@ -102,10 +124,15 @@ try {
                 throw new Exception("SUBSTITUTE harus punya parent");
             }
 
-            // 🔥 EXPLODE (INI YANG PENTING)
             list($subs_code, $subs_supplier_name) = explode("__", $subs_val);
 
-            // 🔥 cari supplier parent
+            // cek global subs
+            $checkPartGlobal->execute([$subs_code]);
+            if ($checkPartGlobal->rowCount() == 0) {
+                throw new Exception("Subs part belum terdaftar: $subs_code");
+            }
+
+            // supplier subs
             $getSupplier->execute(['name' => $subs_supplier_name]);
             $subs_supplier_id = $getSupplier->fetchColumn();
 
@@ -113,7 +140,7 @@ try {
                 throw new Exception("Supplier subs tidak ditemukan: $subs_supplier_name");
             }
 
-            // 🔥 cari part parent
+            // part subs
             $getPart->execute([
                 'code' => $subs_code,
                 'supplier' => $subs_supplier_id
@@ -125,7 +152,6 @@ try {
                 throw new Exception("Subs tidak ditemukan: $subs_code - $subs_supplier_name");
             }
 
-            // 🔥 VALIDASI SELF (FULL IDENTITIY)
             if ($subs_id == $part_id) {
                 throw new Exception("Part tidak boleh menjadi substitute dirinya sendiri");
             }

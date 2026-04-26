@@ -34,10 +34,18 @@ require __DIR__ . '/../../includes/navbar.php';
         position: relative;
     }
 
+    .product-card {
+        position: relative;
+        overflow: visible;
+    }
+
     .remove-btn {
         position: absolute;
         top: 10px;
         right: 10px;
+        z-index: 999;
+        /* 🔥 penting */
+        cursor: pointer;
     }
 
     .finish-box {
@@ -90,23 +98,63 @@ require __DIR__ . '/../../includes/navbar.php';
     let shifts = <?= json_encode($shifts) ?>;
     let lines = <?= json_encode($lines) ?>;
 
+
+    // 🔥 TEMP STOCK (SIMULASI)
+    let tempStock = {};
+    let usagePerProduct = {};
+
     // ================= SHIFT =================
     $(document).on('change', '.shift-check', function() {
-        $('#wrapper').html('');
-        $('.shift-check:checked').each(function() {
-            renderShift($(this).val());
-        });
+
+        let shiftId = $(this).val();
+
+        if ($(this).is(':checked')) {
+
+            // kalau belum ada, baru render
+            if ($(`.shift-card[data-id="${shiftId}"]`).length === 0) {
+                renderShift(shiftId);
+            }
+
+        } else {
+
+            let shiftCard = $(`.shift-card[data-id="${shiftId}"]`);
+
+            // 🔥 BALIKIN STOCK SEMUA PRODUCT DI SHIFT
+            shiftCard.find('.product-card').each(function() {
+
+                let index = $(this).data('index');
+
+                if (usagePerProduct[index]) {
+                    Object.keys(usagePerProduct[index]).forEach(part => {
+
+                        let used = usagePerProduct[index][part];
+
+                        tempStock[part] = (tempStock[part] || 0) - used;
+
+                        if (tempStock[part] <= 0) {
+                            delete tempStock[part];
+                        }
+                    });
+
+                    delete usagePerProduct[index];
+                }
+
+            });
+
+            shiftCard.remove();
+        }
+
     });
 
     function renderShift(id) {
         let shift = shifts.find(s => s.shift_id == id);
 
         let html = `
-    <div class="card card-modern shift-card p-4 mt-4" data-id="${id}">
-        <h5>Shift ${shift.shift}</h5>
-        <div class="lines"></div>
-        <button type="button" class="btn btn-primary btn-sm add-line mt-2">+ Line</button>
-    </div>`;
+<div class="card card-modern shift-card p-4 mt-4" data-id="${id}">
+    <h5>Shift ${shift.shift}</h5>
+    <div class="lines"></div>
+    <button type="button" class="btn btn-primary btn-sm add-line mt-2">+ Line</button>
+</div>`;
 
         $('#wrapper').append(html);
     }
@@ -117,18 +165,18 @@ require __DIR__ . '/../../includes/navbar.php';
         let shiftId = card.data('id');
 
         let html = `
-    <div class="line-card p-3 mt-3">
-        <button type="button" class="btn btn-danger btn-sm remove-btn remove-line">×</button>
+<div class="line-card p-3 mt-3">
+    <button type="button" class="btn btn-danger btn-sm remove-btn remove-line">×</button>
 
-        <label>Line</label>
-        <select class="form-control line-select" name="line[${shiftId}][]">
-            <option value="">Select</option>
-            ${lines.map(l=>`<option value="${l.line_id}">${l.line_name}</option>`).join('')}
-        </select>
+    <label>Line</label>
+    <select class="form-control line-select" name="line[${shiftId}][]">
+        <option value="">Select</option>
+        ${lines.map(l=>`<option value="${l.line_id}">${l.line_name}</option>`).join('')}
+    </select>
 
-        <div class="products"></div>
-        <button type="button" class="btn btn-success btn-sm add-product mt-2">+ Product</button>
-    </div>`;
+    <div class="products"></div>
+    <button type="button" class="btn btn-success btn-sm add-product mt-2">+ Product</button>
+</div>`;
 
         card.find('.lines').append(html);
     });
@@ -136,11 +184,12 @@ require __DIR__ . '/../../includes/navbar.php';
     // ================= PRODUCT =================
     $(document).on('click', '.add-product', function() {
 
-        let lineCard = $(this).closest('.line-card');
+        let lineCard = $(this).closest('.line-card'); // 🔥 WAJIB ADA
+
         let index = Date.now() + Math.floor(Math.random() * 1000);
 
         let html = `
-<div class="product-card" data-index="${index}">
+<div class="product-card" data-index="${index}" data-generated="false">
 <button type="button" class="btn btn-danger btn-sm remove-btn remove-product">×</button>
 
 <div class="row">
@@ -172,45 +221,151 @@ require __DIR__ . '/../../includes/navbar.php';
         lineCard.find('.products').append(html);
     });
 
+    // ================= VALIDATION =================
+    function isLineDuplicate(shiftId, lineId) {
+        let count = 0;
+        $(`.shift-card[data-id="${shiftId}"] .line-select`).each(function() {
+            if ($(this).val() == lineId) count++;
+        });
+        return count > 1;
+    }
 
+    function isModelDuplicate(shiftId, lineId, product, currentCard) {
+        let isDuplicate = false;
+
+        $(`.shift-card[data-id="${shiftId}"] .line-card`).each(function() {
+
+            let currentLineId = $(this).find('.line-select').val();
+
+            if (currentLineId == lineId) {
+                $(this).find('.product-card').each(function() {
+
+                    if (this === currentCard[0]) return;
+
+                    let val = $(this).find('.product-select').val();
+
+                    if (val == product) {
+                        isDuplicate = true;
+                    }
+                });
+            }
+        });
+
+        return isDuplicate;
+    }
+
+    // 🔥 AMBIL END TIME TERAKHIR (SMART)
+    function getLastEndTime(lineCard, shift) {
+
+        let lastEnd = shift.start * 60;
+
+        lineCard.find('.product-card').each(function() {
+
+            let finishText = $(this).find('.finish-box').text();
+
+            if (finishText.includes(':')) {
+                let time = finishText.match(/(\d{2}):(\d{2})/);
+
+                if (time) {
+                    let h = parseInt(time[1]);
+                    let m = parseInt(time[2]);
+
+                    let total = h * 60 + m;
+
+                    if (total > lastEnd) lastEnd = total;
+                }
+            }
+        });
+
+        return lastEnd;
+
+    }
     // ================= GENERATE =================
     $(document).on('click', '.generate', function() {
 
-        let card = $(this).closest('.product-card');
+        let card = $(this).closest('.product-card'); // 🔥 HARUS PALING ATAS
+        let lineCard = card.closest('.line-card');
         let index = card.data('index');
+        let current;
+
+        // cek product sebelumnya
+        let prev = card.prev('.product-card');
 
         let shiftId = card.closest('.shift-card').data('id');
+        let shift = shifts.find(s => s.shift_id == shiftId); // 🔥 PINDAH KE ATAS
+
         let lineId = card.closest('.line-card').find('.line-select').val();
         let product = card.find('.product-select').val();
+        let date = $('input[name=production_date]').val();
 
+
+        // cek product sebelumnya
+
+        if (prev.length && prev.find('.finish-box').length) {
+
+            let txt = prev.find('.finish-box').text();
+            let match = txt.match(/(\d{2}):(\d{2})/);
+
+            if (match) {
+                current = parseInt(match[1]) * 60 + parseInt(match[2]);
+            } else {
+                current = shift.start * 60;
+            }
+
+        } else {
+            current = shift.start * 60;
+        }
         if (!product || !lineId) return alert('Line & Model wajib');
 
-        // ================= RESET MATERIAL =================
+        if (isLineDuplicate(shiftId, lineId)) {
+            return alert('Line sudah dipakai di shift ini!');
+        }
+
+        if (isModelDuplicate(shiftId, lineId, product, card)) {
+            return alert('Model sudah ada di line ini!');
+        }
+
+        if (card.attr('data-generated') === 'true') {
+            if (!confirm('Planning sudah ada. Mau generate ulang?')) return;
+
+            card.attr('data-generated', 'false');
+
+            // 🔥 BALIKIN STOCK PRODUCT INI SAJA
+            if (usagePerProduct[index]) {
+                Object.keys(usagePerProduct[index]).forEach(part => {
+
+                    let used = usagePerProduct[index][part];
+
+                    tempStock[part] = (tempStock[part] || 0) - used;
+
+                    if (tempStock[part] <= 0) {
+                        delete tempStock[part];
+                    }
+
+                });
+
+                delete usagePerProduct[index];
+            }
+        }
         card.find('.material-table').html('');
 
-        // ================= SAVE PRODUCT =================
         if (!card.find('.hidden-product').length) {
             card.append(`<input type="hidden" 
         name="product_code[${shiftId}][${lineId}][${index}]" 
         value="${product}">`);
         }
 
-        let shift = shifts.find(s => s.shift_id == shiftId);
         let target = parseInt(card.find('.target').val()) || 0;
         let cycle = parseInt(card.find('.cycle').val()) || 1;
 
-        let current = shift.start * 60;
+        // 🔥 SMART START TIME
+
+
         let produced = 0;
         let hourly = {};
 
         function pad(n) {
             return String(n).padStart(2, '0');
-        }
-
-        function formatTime(min) {
-            let h = Math.floor(min / 60) % 24;
-            let m = Math.floor(min % 60);
-            return `${pad(h)}:${pad(m)}`;
         }
 
         function getBreakInfo(hourStart, hourEnd) {
@@ -220,7 +375,7 @@ require __DIR__ . '/../../includes/navbar.php';
                 let s = shift.time_coffe;
                 let e = s + shift.duration_time;
                 if (s < hourEnd && e > hourStart) {
-                    info.push(`Coffee ${formatTime(s)}-${formatTime(e)}`);
+                    info.push(`Coffee ${pad(Math.floor(s/60))}:${pad(s%60)}-${pad(Math.floor(e/60))}:${pad(e%60)}`);
                 }
             }
 
@@ -228,7 +383,7 @@ require __DIR__ . '/../../includes/navbar.php';
                 let s = shift.break_makan;
                 let e = s + shift.duration_bm;
                 if (s < hourEnd && e > hourStart) {
-                    info.push(`Break ${formatTime(s)}-${formatTime(e)}`);
+                    info.push(`Break ${pad(Math.floor(s/60))}:${pad(s%60)}-${pad(Math.floor(e/60))}:${pad(e%60)}`);
                 }
             }
 
@@ -251,7 +406,6 @@ require __DIR__ . '/../../includes/navbar.php';
             return false;
         }
 
-        // ================= SIMULASI =================
         while (produced < target) {
             if (!isBreak(current)) {
                 let h = Math.floor(current / 60);
@@ -264,7 +418,6 @@ require __DIR__ . '/../../includes/navbar.php';
             }
         }
 
-        // ================= BUILD JAM =================
         let hours = [];
         if (shift.start < shift.end) {
             for (let i = shift.start; i < shift.end; i++) hours.push(i);
@@ -274,18 +427,16 @@ require __DIR__ . '/../../includes/navbar.php';
         }
 
         let table = '';
-        let total = 0;
 
         hours.forEach(h => {
 
             let next = (h + 1) % 24;
             let val = hourly[h] || 0;
-            total += val;
-
             let hourStart = h * 60;
             let hourEnd = (next === 0 ? 24 : next) * 60;
 
             let breakInfo = getBreakInfo(hourStart, hourEnd);
+
             let jam = `${pad(h)}:00-${pad(next)}:00`;
 
             table += `
@@ -296,12 +447,11 @@ ${breakInfo ? `<div style="font-size:11px;color:#f59e0b;">${breakInfo}</div>` : 
 </td>
 <td>
 <input name="qty[${shiftId}][${lineId}][${index}][${jam}]" 
-value="${val}" class="form-control" >
+value="${val}" class="form-control">
 </td>
 </tr>`;
         });
 
-        // ================= OT =================
         let ot = 0;
         Object.keys(hourly).forEach(h => {
             if (!hours.includes(parseInt(h))) ot += hourly[h];
@@ -312,11 +462,75 @@ value="${val}" class="form-control" >
 <td>OT</td>
 <td>
 <input name="qty[${shiftId}][${lineId}][${index}][OT]" 
-value="${ot}" class="form-control" >
+value="${ot}" class="form-control">
 </td>
 </tr>`;
 
         card.find('.time-table').html(table);
+
+        // 🔥 CLEANUP USAGE LAMA DULU
+        if (usagePerProduct[index]) {
+
+            Object.keys(usagePerProduct[index]).forEach(part => {
+
+                let used = usagePerProduct[index][part];
+
+                tempStock[part] = (tempStock[part] || 0) - used;
+
+                if (tempStock[part] <= 0) {
+                    delete tempStock[part];
+                }
+
+            });
+
+            delete usagePerProduct[index];
+        }
+        // ================= STOCK SIMULATION =================
+        $.post("<?= BASE_URL ?>controllers/production_planning/get_material.php", {
+            product,
+            target
+        }, function(res) {
+
+            let html = `<tr>
+<th>Pilih</th><th>Part</th><th>Supplier</th><th>Type</th><th>Stock</th><th>Need</th><th>Shortage</th>
+</tr>`;
+
+            res.forEach(r => {
+
+                let used = tempStock[r.part_code] || 0;
+                let realStock = r.stock - used;
+                let shortage = realStock - r.need;
+
+                if (!usagePerProduct[index]) {
+                    usagePerProduct[index] = {};
+                }
+
+                usagePerProduct[index][r.part_code] = r.need;
+                tempStock[r.part_code] = used + r.need;
+
+                let isShort = shortage < 0;
+
+                html += `
+<tr ${isShort?'style="background:#ffe5e5"':''}>
+<td>
+<input type="checkbox"
+name="material[${shiftId}][${lineId}][${index}][]"
+value="${r.id_pa}"
+${r.remark==0 && realStock > 0?'checked':''}
+>
+</td>
+<td>${r.part_code}</td>
+<td>${r.supplier ?? '-'}</td>
+<td>${r.remark==0?'MAIN':'SUB'}</td>
+<td style="color:${isShort?'red':'green'}">${realStock}</td>
+<td>${r.need}</td>
+<td style="color:${isShort?'red':'green'}">${shortage}</td>
+</tr>`;
+            });
+
+            card.find('.material-table').html(html);
+
+        }, 'json');
 
         // ================= FINISH =================
         let fh = Math.floor(current / 60) % 24;
@@ -331,40 +545,62 @@ Selesai: ${pad(fh)}:${pad(fm)}
 ${ot>0?'<span style="color:red">(Overtime)</span>':''}
 `);
 
-        // ================= LOAD MATERIAL (AUTO) =================
-        $.post("<?= BASE_URL ?>controllers/production_planning/get_material.php", {
-            product,
-            target
-        }, function(res) {
+        card.attr('data-generated', 'true');
 
-            let html = `<tr>
-<th>Pilih</th><th>Part</th><th>Supplier</th><th>Type</th><th>Stock</th><th>Need</th><th>Shortage</th>
-</tr>`;
+    });
+    $(document).on('click', '.remove-line', function() {
 
-            res.forEach(r => {
-                let isShort = r.shortage > 0;
+        if (!confirm('Hapus line ini?')) return;
 
-                html += `
-<tr ${isShort?'style="background:#ffe5e5"':''}>
-<td>
-<input type="checkbox"
-name="material[${shiftId}][${lineId}][${index}][]"
-value="${r.id_pa}"
-${r.remark==0 && r.stock > 0?'checked':''}
->
-</td>
-<td>${r.part_code}</td>
-<td>${r.supplier ?? '-'}</td>
-<td>${r.remark==0?'MAIN':'SUB'}</td>
-<td style="color:${isShort?'red':'green'}">${r.stock}</td>
-<td>${r.need}</td>
-<td style="color:${isShort?'red':'green'}">${r.shortage}</td>
-</tr>`;
+        let line = $(this).closest('.line-card');
+
+        line.find('.product-card').each(function() {
+
+            let index = $(this).data('index');
+
+            if (usagePerProduct[index]) {
+                Object.keys(usagePerProduct[index]).forEach(part => {
+
+                    let used = usagePerProduct[index][part];
+
+                    tempStock[part] = (tempStock[part] || 0) - used;
+
+                    if (tempStock[part] <= 0) {
+                        delete tempStock[part];
+                    }
+                });
+
+                delete usagePerProduct[index];
+            }
+
+        });
+
+        line.remove();
+    });
+
+    $(document).on('click', '.remove-product', function() {
+
+        if (!confirm('Hapus product ini?')) return;
+
+        let card = $(this).closest('.product-card');
+        let index = card.data('index');
+
+        // 🔥 BALIKIN STOCK
+        if (usagePerProduct[index]) {
+            Object.keys(usagePerProduct[index]).forEach(part => {
+
+                let used = usagePerProduct[index][part];
+
+                tempStock[part] = (tempStock[part] || 0) - used;
+
+                if (tempStock[part] <= 0) {
+                    delete tempStock[part];
+                }
             });
 
-            card.find('.material-table').html(html);
+            delete usagePerProduct[index];
+        }
 
-        }, 'json');
-
+        card.remove();
     });
 </script>

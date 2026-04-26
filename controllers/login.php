@@ -33,7 +33,7 @@ if ($_SERVER['REQUEST_METHOD'] === "POST") {
             /**
              * ADMIN langsung dashboard
              */
-            if ($user['rule'] !== 'line' || $user['rule'] !== 'operator') {
+            if ($user['rule'] != 'line' || $user['rule'] != 'operator') {
                 redirect("pages/dashboard.php");
             }
 
