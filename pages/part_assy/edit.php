@@ -118,9 +118,16 @@ require __DIR__ . '/../../includes/navbar.php';
 </div>
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     const parts = <?= json_encode($parts); ?>;
     const bom = <?= json_encode($bom); ?>;
+
+    function formatPartName(name) {
+        return (name || '').replace(/_/g, ' ');
+    }
 
     /* ======================
        GET SELECTED PARTS
@@ -153,11 +160,15 @@ require __DIR__ . '/../../includes/navbar.php';
 
                 opt.disabled = disabled;
 
+                let code = opt.dataset.code;
+                let name = formatPartName(opt.dataset.name);
+                let supplier = opt.dataset.supplier;
+
                 if (disabled) {
-                    opt.textContent = '❌ ' + opt.value;
+                    opt.textContent = `❌ ${code} - ${name} - ${supplier}`;
                     opt.style.color = '#dc3545';
                 } else {
-                    opt.textContent = opt.value;
+                    opt.textContent = `${code} - ${name} - ${supplier}`;
                     opt.style.color = '';
                 }
             });
@@ -167,16 +178,25 @@ require __DIR__ . '/../../includes/navbar.php';
 
     /* ====================== */
     function fillSubsOptions() {
+
         let options = '<option value="">-</option>';
+
         parts.forEach(p => {
-            options += `<option value="${p.part_code}__${p.name_supplier}">
-        ${p.part_code} - ${p.part_name} - ${p.name_supplier}</option>`;
+            options += `<option 
+            value="${p.part_code}__${p.name_supplier}">
+            ${p.part_code} - ${formatPartName(p.part_name)} - ${p.name_supplier}
+        </option>`;
         });
 
         document.querySelectorAll('.subs').forEach(s => {
             let val = s.value;
             s.innerHTML = options;
-            if (val) s.value = val;
+
+            if (val && s.querySelector(`option[value="${val}"]`)) {
+                s.value = val;
+            } else {
+                s.value = '';
+            }
         });
     }
 
@@ -213,9 +233,13 @@ require __DIR__ . '/../../includes/navbar.php';
         parts.forEach(p => {
             let val = p.part_code + "__" + p.name_supplier;
 
-            options += `<option value="${val}"
-    ${row && row.part_code==p.part_code && row.name_supplier==p.name_supplier?'selected':''}>
-    ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+            options += `<option 
+        value="${val}"
+        data-code="${p.part_code}"
+        data-name="${p.part_name}"
+        data-supplier="${p.name_supplier}"
+        ${row && row.part_code==p.part_code && row.name_supplier==p.name_supplier?'selected':''}>
+        ${p.part_code} - ${formatPartName(p.part_name)} - ${p.name_supplier}
     </option>`;
         });
 
@@ -244,19 +268,22 @@ require __DIR__ . '/../../includes/navbar.php';
 </tr>`;
     }
 
-    /* ====================== */
+
+
     function loadData() {
         $("#tableBody").html('');
+
         bom.forEach(r => {
             $("#tableBody").append(renderRow(r));
         });
 
         renumber();
+        refreshPartOptions();
         fillSubsOptions();
         autoSetSubs();
-        refreshPartOptions(); // 🔥 penting
-    }
 
+        initSelect2(); // 🔥 WAJIB
+    }
     /* ====================== */
     function renumber() {
         $("#tableBody tr").each((i, e) => {
@@ -264,25 +291,37 @@ require __DIR__ . '/../../includes/navbar.php';
         });
     }
 
-    /* ====================== EVENTS */
     $("#btnAddRow").click(() => {
         $("#tableBody").append(renderRow());
+
         renumber();
+        refreshPartOptions();
         fillSubsOptions();
         autoSetSubs();
-        refreshPartOptions(); // 🔥
+
+        initSelect2(); // 🔥 WAJIB
     });
 
     $(document).on("change", ".remark", function() {
         autoSetSubs();
     });
 
-    $(document).on("change", ".part-select", function() {
-        let s = $(this).find(":selected").text();
-        $(this).closest("tr").find(".supplier").text(s.split('-').pop());
 
-        refreshPartOptions(); // 🔥 inti
+    $(document).on("change", ".part-select", function() {
+
+        let selected = $(this).find(":selected");
+
+        let supplier = selected.data("supplier") || '-';
+
+        let row = $(this).closest("tr");
+        row.find(".supplier").text(supplier);
+
+        refreshPartOptions();
+        fillSubsOptions();
         autoSetSubs();
+
+        // 🔥 refresh select2 display
+        $('.part-select').trigger('change.select2');
     });
 
     $(document).on("click", ".del", function() {
@@ -352,6 +391,26 @@ require __DIR__ . '/../../includes/navbar.php';
 
     });
 
+    function initSelect2() {
+        $('.part-select').select2({
+            placeholder: "Cari part...",
+            width: '100%',
+            matcher: function(params, data) {
+                if ($.trim(params.term) === '') {
+                    return data;
+                }
+
+                let text = data.text.toLowerCase();
+                let term = params.term.toLowerCase();
+
+                if (text.includes(term)) {
+                    return data;
+                }
+
+                return null;
+            }
+        });
+    }
     /* INIT */
     loadData();
 </script>

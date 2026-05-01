@@ -101,10 +101,15 @@ require __DIR__ . '/../../includes/navbar.php';
 </div>
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
 <script src="<?= BASE_URL ?>assets/js/papaparse.min.js"></script>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
     const parts = <?= json_encode($parts); ?>;
 
+    function formatPartName(name) {
+        return (name || '').replace(/_/g, ' ');
+    }
     /* ======================
        GET SELECTED PARTS
     ====================== */
@@ -122,14 +127,23 @@ require __DIR__ . '/../../includes/navbar.php';
 
         parts.forEach(p => {
             partOptions += `<option value="${p.part_code}__${p.name_supplier}">
-            ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+            ${p.part_code} - ${formatPartName(p.part_name)} - ${p.name_supplier}
         </option>`;
         });
 
         document.querySelectorAll('.subs').forEach(select => {
+
             let current = select.value;
+
             select.innerHTML = partOptions;
-            if (current) select.value = current;
+
+            // 🔥 force refresh (ini penting banget)
+            if (current && select.querySelector(`option[value="${current}"]`)) {
+                select.value = current;
+            } else {
+                select.value = '';
+            }
+
         });
     }
 
@@ -141,14 +155,17 @@ require __DIR__ . '/../../includes/navbar.php';
 
             let remark = $(this).find(".remark").val();
             let partVal = $(this).find(".part-select").val();
-
-            if (!partVal) return;
-
             let subsSelect = $(this).find(".subs");
+
+            if (!partVal) {
+                subsSelect.val('');
+                subsSelect.prop("disabled", true);
+                return;
+            }
 
             if (remark == 0) {
                 // MAIN
-                lastMain = partVal; // 🔥 FULL VALUE (code + supplier)
+                lastMain = partVal;
 
                 subsSelect.val('');
                 subsSelect.prop("disabled", true);
@@ -156,8 +173,11 @@ require __DIR__ . '/../../includes/navbar.php';
             } else {
                 // SUBSTITUTE
                 if (lastMain) {
-                    subsSelect.val(lastMain);
                     subsSelect.prop("disabled", false);
+
+                    // 🔥 set value setelah enable
+                    subsSelect.val(lastMain);
+
                 } else {
                     subsSelect.val('');
                     subsSelect.prop("disabled", true);
@@ -180,18 +200,22 @@ require __DIR__ . '/../../includes/navbar.php';
 
                 let disabled = false;
 
-                // disable kalau sudah dipakai di row lain
                 if (used.includes(opt.value) && opt.value !== select.value) {
                     disabled = true;
                 }
 
                 opt.disabled = disabled;
 
+                // 🔥 ambil dari dataset (INI KUNCI)
+                let code = opt.dataset.code;
+                let name = formatPartName(opt.dataset.name);
+                let supplier = opt.dataset.supplier;
+
                 if (disabled) {
-                    opt.textContent = '❌ ' + opt.value + ' - ' + opt.dataset.name;
+                    opt.textContent = `❌ ${code} - ${name} - ${supplier}`;
                     opt.style.color = '#dc3545';
                 } else {
-                    opt.textContent = opt.value + ' - ' + opt.dataset.name;
+                    opt.textContent = `${code} - ${name} - ${supplier}`;
                     opt.style.color = '';
                 }
 
@@ -213,7 +237,7 @@ require __DIR__ . '/../../includes/navbar.php';
     data-code="${p.part_code}"
     data-name="${p.part_name}"
     data-supplier="${p.name_supplier || '-'}">
-    ${p.part_code} - ${p.part_name} - ${p.name_supplier}
+   ${p.part_code} - ${formatPartName(p.part_name)} - ${p.name_supplier}
 </option>`;
         });
 
@@ -368,6 +392,7 @@ require __DIR__ . '/../../includes/navbar.php';
         refreshPartOptions();
         fillSubsOptions();
         autoSetSubs();
+        initSelect2(); // 🔥 WAJIB
     });
 
     /* ======================
@@ -390,7 +415,8 @@ require __DIR__ . '/../../includes/navbar.php';
             row.find(".supplier").text(supplier);
         }
 
-        refreshPartOptions(); // 🔥 penting
+        refreshPartOptions();
+        fillSubsOptions(); // 🔥 penting
         autoSetSubs();
     });
 
@@ -534,4 +560,25 @@ require __DIR__ . '/../../includes/navbar.php';
         });
 
     });
+
+    function initSelect2() {
+        $('.part-select').select2({
+            placeholder: "Cari part...",
+
+            matcher: function(params, data) {
+                if ($.trim(params.term) === '') {
+                    return data;
+                }
+
+                let text = data.text.toLowerCase();
+                let term = params.term.toLowerCase();
+
+                if (text.includes(term)) {
+                    return data;
+                }
+
+                return null;
+            }
+        });
+    }
 </script>

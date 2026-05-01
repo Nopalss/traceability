@@ -31,15 +31,23 @@ require __DIR__ . '/../../includes/navbar.php';
                         <div class="card">
                             <div class="card-body d-flex flex-column">
                                 <div class="input-group-sm mb-5">
-                                    <label class="form-label  font-weight-bolder">
+                                    <label class="form-label font-weight-bolder">
                                         Supplier
                                     </label>
-                                    <select name="supplier" id="supplier" class="form-control">
-                                        <option value="">Pilih Supplier</option>
-                                        <?php foreach ($supplier as $s): ?>
-                                            <option value="<?= $s["id_supplier"] ?>"><?= $s["name_supplier"] ?></option>
-                                        <?php endforeach ?>
-                                    </select>
+
+                                    <div class="d-flex">
+                                        <select name="supplier" id="supplier" class="form-control">
+                                            <option value="">Pilih Supplier</option>
+                                            <option value="auto">
+                                                Auto
+                                            </option>
+                                            <?php foreach ($supplier as $s): ?>
+                                                <option value="<?= $s["id_supplier"] ?>">
+                                                    <?= $s["name_supplier"] ?>
+                                                </option>
+                                            <?php endforeach ?>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <h4>Masukkan QR Code</h4>
@@ -136,4 +144,6 @@ require __DIR__ . '/../../includes/navbar.php';
 <!-- JS -->
 
 <?php require __DIR__ . '/../../includes/footer.php'; ?>
-<script src="<?= BASE_URL ?>assets/js/scan/incoming.js"></script>
+
+<script src="<?= BASE_URL ?>assets/js/scan/incoming.js">
+</script>
